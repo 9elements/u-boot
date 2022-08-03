@@ -10,7 +10,6 @@
 #include <mmc.h>
 #include <xyzModem.h>
 #include <asm/io.h>
-#include <asm/arch/aspeed_verify.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -71,7 +70,7 @@ u32 spl_boot_device(void)
 void board_boot_order(u32 *spl_boot_list)
 {
 	spl_boot_list[0] = spl_boot_device();
-	spl_boot_list[1] = ASPEED_BOOT_DEVICE_UART;
+	spl_boot_list[1] = BOOT_DEVICE_UART;
 }
 
 #ifdef CONFIG_SPL_OS_BOOT

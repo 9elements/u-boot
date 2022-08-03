@@ -358,13 +358,6 @@ config CMD_ZBOOT
 	  booting both 32- and 64-bit kernels, as well as secure boot.
 	  Documentation is available in doc/uImage.FIT/x86-fit-boot.txt
 
-config CMD_BOOTS
-	bool "boots - Aspeed secure boot command"
-	depends on ASPEED_SECURE_BOOT
-	help
-	  Boot in-memory application image with the
-	  secure boot verification enabled
-
 endmenu
 
 menu "Environment commands"

@@ -7,13 +7,7 @@ ifndef CONFIG_SPL_BUILD
 # core command
 obj-y += boot.o
 
-ifndef CONFIG_ASPEED_SECURE_BOOT
 obj-$(CONFIG_CMD_BOOTM) += bootm.o
-else
-ifdef CONFIG_ASPEED_SECURE_BOOT_DEBUG
-obj-$(CONFIG_CMD_BOOTM) += bootm.o
-endif
-endif
 obj-y += help.o
 obj-y += version.o
 
@@ -172,7 +166,6 @@ obj-$(CONFIG_CMD_DFU) += dfu.o
 obj-$(CONFIG_CMD_GPT) += gpt.o
 obj-$(CONFIG_CMD_ETHSW) += ethsw.o
 obj-$(CONFIG_CMD_AXI) += axi.o
-obj-$(CONFIG_CMD_BOOTS) += boots.o
 
 # Power
 obj-$(CONFIG_CMD_PMIC) += pmic.o
