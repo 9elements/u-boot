@@ -894,6 +894,30 @@ static void ast2600_sdrammc_ecc_enable(struct dram_info *info, u32 conf_size_mb)
 	writel(0, &regs->intr_ctrl);
 }
 
+static bool ast2600_sdrammc_init_required(struct udevice *dev)
+{
+	struct dram_info *priv = dev_get_priv(dev);
+	struct ast2600_sdrammc_regs *regs = priv->regs;
+	bool ecc_requested;
+	bool ecc_enabled;
+	bool dram_ready;
+
+	ecc_requested = dev_read_bool(dev, "aspeed,ecc-enabled");
+	ecc_enabled = readl(&regs->config) & SDRAM_CONF_ECC_SETUP;
+	dram_ready  = readl(priv->scu + AST_SCU_HANDSHAKE) & SCU_SDRAM_INIT_READY_MASK;
+
+	debug("ECC: requested %d enabled %d dram ready %d\n",
+			ecc_requested, ecc_enabled, dram_ready);
+
+	if (!dram_ready)
+		return true;
+
+	if (ecc_requested != ecc_enabled)
+		return true;
+
+	return false;
+}
+
 static int ast2600_sdrammc_probe(struct udevice *dev)
 {
 	struct dram_info *priv = (struct dram_info *)dev_get_priv(dev);
@@ -916,8 +940,7 @@ static int ast2600_sdrammc_probe(struct udevice *dev)
 		return PTR_ERR(priv->scu);
 	}
 
-	reg = readl(priv->scu + AST_SCU_HANDSHAKE);
-	if (reg & SCU_SDRAM_INIT_READY_MASK) {
+	if (!ast2600_sdrammc_init_required(dev)) {
 		printf("already initialized, ");
 		setbits_le32(priv->scu + AST_SCU_HANDSHAKE, SCU_HANDSHAKE_MASK);
 		ast2600_sdrammc_update_size(priv);

@@ -409,6 +409,27 @@ static void ast2500_sdrammc_lock(struct dram_info *info)
 		;
 }
 
+static bool ast2500_sdrammc_init_required(struct udevice *dev)
+{
+	struct dram_info *priv = dev_get_priv(dev);
+	struct ast2500_sdrammc_regs *regs = priv->regs;
+	bool ecc_requested;
+	bool ecc_enabled;
+	bool dram_ready;
+
+	ecc_requested = dev_read_bool(dev, "aspeed,ecc-enabled");
+	ecc_enabled = readl(&regs->config) & SDRAM_CONF_ECC_EN;
+	dram_ready  = readl(&priv->scu->vga_handshake[0]) & BIT(6);
+
+	if (!dram_ready)
+		return true;
+
+	if (ecc_requested != ecc_enabled)
+		return true;
+
+	return false;
+}
+
 static int ast2500_sdrammc_probe(struct udevice *dev)
 {
 	struct dram_info *priv = (struct dram_info *)dev_get_priv(dev);
@@ -437,7 +458,7 @@ static int ast2500_sdrammc_probe(struct udevice *dev)
 		return PTR_ERR(priv->scu);
 	}
 
-	if (readl(&priv->scu->vga_handshake[0]) & (0x1 << 6)) {
+	if (!ast2500_sdrammc_init_required(dev)) {
 		ast2500_sdrammc_update_size(priv);
 
 		if (!(readl(&priv->regs->config) & SDRAM_CONF_CACHE_EN)) {
