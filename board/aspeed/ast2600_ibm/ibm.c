@@ -35,7 +35,7 @@ int board_late_init(void)
 	if (rc)
 		return 0;
 
-	rc = tpm2_pcr_extend(dev, 0, digest);
+	rc = tpm2_pcr_extend(dev, 0, TPM2_ALG_SHA256, digest, sizeof(digest));
 	if (!rc)
 		printf("TPM: PCR0 extended.\n");
 
