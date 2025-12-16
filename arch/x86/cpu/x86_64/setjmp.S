@@ -47,3 +47,26 @@ ENTRY(longjmp)
 	jmpq	*%rcx
 
 ENDPROC(longjmp)
+
+.align 8
+
+ENTRY(initjmp)
+	/* rdi: jump buffer, rsi: entry point address, rdx: stack base, rcx: stack size */
+	add	%rdx, %rcx
+
+	sub	$8, %rcx	/* Emulate return address pushed to stack */
+
+	movq	%rsi, (%rdi)	/* Return address. */
+	movq	%rcx, 8(%rdi)	/* Setup new stack */
+	/* Clear remaining registers */
+	xor	%rax, %rax
+	movq	%rax, 16(%rdi)
+	movq	%rax, 24(%rdi)
+	movq	%rax, 32(%rdi)
+	movq	%rax, 40(%rdi)
+	movq	%rax, 48(%rdi)
+	movq	%rax, 56(%rdi)
+
+	ret
+
+ENDPROC(initjmp)

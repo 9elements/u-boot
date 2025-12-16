@@ -63,3 +63,37 @@ nz:
 	jmp *20(%edx)
 
 	.size longjmp, .-longjmp
+
+	.align 4
+	.globl initjmp
+	.type initjmp, @function
+initjmp:
+	pushl	%edi
+
+#ifdef _REGPARM
+	movl	%eax, %edi	/* jump buffer */
+	/* %edx - entry point address */
+	/* %ecx - stack base */
+	movl 8(%esp), %eax	/* stack size */
+#else
+	movl	8(%esp), %edi	/* jump buffer */
+	movl	12(%esp), %edx	/* entry point address */
+	movl	16(%esp), %ecx	/* stack base */
+	movl	20(%esp), %eax	/* stack size */
+#endif
+	addl	%ecx, %eax
+	subl	$4, %eax	/* Emulate return address pushed to stack */
+
+	movl	%edx, 20(%edi)	/* Return address */
+	movl	%eax, 4(%edi)	/* Post-return %esp! */
+
+	xorl	%eax, %eax
+	movl	%eax, 0(%edi)	/* ebx */
+	movl	%eax, 8(%edi)	/* ebp */
+	movl	%eax, 12(%edi)	/* esi */
+	movl	%eax, 16(%edi)	/* edi */
+
+	pop	%edi
+	ret
+
+	.size initjmp, .-initjmp
