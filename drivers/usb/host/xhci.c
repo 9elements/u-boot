@@ -1028,6 +1028,10 @@ static int xhci_submit_root(struct usb_device *udev, unsigned long pipe,
 				debug("SPEED = SUPERSPEED\n");
 				tmpbuf[1] |= USB_PORT_STAT_SUPER_SPEED >> 8;
 				break;
+			case XDEV_SSP:
+				debug("SPEED = SUPERSPEEDPLUS\n");
+				tmpbuf[1] |= USB_PORT_STAT_SUPER_SPEED >> 8;
+				break;
 			}
 		}
 		if (reg & PORT_PE)
