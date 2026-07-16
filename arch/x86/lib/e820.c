@@ -112,18 +112,37 @@ void efi_add_known_memory(void)
 {
 	struct e820_entry e820[E820MAX];
 	unsigned int i, num;
-	u64 start;
+	u64 start, rgn_top, ram_top;
 	int type;
 
 	num = install_e820_map(ARRAY_SIZE(e820), e820);
+
+	ram_top = (u64)gd->ram_top & ~EFI_PAGE_MASK;
+	if (!ram_top)
+		ram_top = 0x100000000ULL;
 
 	for (i = 0; i < num; ++i) {
 		start = e820[i].addr;
 
 		switch (e820[i].type) {
 		case E820_RAM:
-			type = EFI_CONVENTIONAL_MEMORY;
-			break;
+			/*
+			 * Conventional RAM up to ram_top is added to the EFI
+			 * memory map by the LMB module (see lmb_arch_add_memory()
+			 * below). RAM above ram_top is intentionally left out of
+			 * LMB - U-Boot relocates within the 32-bit space and must
+			 * not allocate from it - so it never reaches the map that
+			 * way. Add that upper region here as conventional memory
+			 * so the OS still sees it as usable.
+			 */
+			rgn_top = start + e820[i].size;
+			if (rgn_top <= ram_top)
+				continue;
+			if (start < ram_top)
+				start = ram_top;
+			efi_add_memory_map(start, rgn_top - start,
+					   EFI_CONVENTIONAL_MEMORY);
+			continue;
 		case E820_RESERVED:
 			type = EFI_RESERVED_MEMORY_TYPE;
 			break;
@@ -139,8 +158,7 @@ void efi_add_known_memory(void)
 			break;
 		}
 
-		if (type != EFI_CONVENTIONAL_MEMORY)
-			efi_add_memory_map(start, e820[i].size, type);
+		efi_add_memory_map(start, e820[i].size, type);
 	}
 }
 #endif /* CONFIG_IS_ENABLED(EFI_LOADER) */
