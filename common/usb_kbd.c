@@ -33,6 +33,9 @@
 
 #define USB_VENDOR_ID_KEYCHRON	0x3434
 
+#define USB_VENDOR_ID_LINUX_FOUNDATION			0x1d6b
+#define USB_DEVICE_ID_LF_MULTIFUNCTION_GADGET		0x0104
+
 #define USB_HID_QUIRK_POLL_NO_REPORT_IDLE	BIT(0)
 
 /*
@@ -521,6 +524,16 @@ static int usb_kbd_probe_dev(struct usb_device *dev, unsigned int ifnum)
 	case USB_VENDOR_ID_KEYCHRON:
 		quirks |= USB_HID_QUIRK_POLL_NO_REPORT_IDLE;
 		break;
+	case USB_VENDOR_ID_LINUX_FOUNDATION:
+		/*
+		 * BMC/KVM keyboards emulated via the Linux USB gadget
+		 * framework only send reports on key presses and NAK the
+		 * idle interrupt-IN endpoint.
+		 */
+		if (dev->descriptor.idProduct ==
+		    USB_DEVICE_ID_LF_MULTIFUNCTION_GADGET)
+			quirks |= USB_HID_QUIRK_POLL_NO_REPORT_IDLE;
+		break;
 	default:
 		break;
 	}
@@ -571,6 +584,23 @@ static int usb_kbd_probe_dev(struct usb_device *dev, unsigned int ifnum)
 	 */
 	if (quirks & USB_HID_QUIRK_POLL_NO_REPORT_IDLE) {
 		debug("USB KBD: quirk: skip testing device state\n");
+#ifdef CONFIG_SYS_USB_EVENT_POLL_VIA_INT_QUEUE
+		/*
+		 * Interrupt-queue polling still needs a queue posted. Unlike
+		 * the blocking state read below, creating the queue does not
+		 * require the device to report while idle, so it is safe for
+		 * these keyboards.
+		 */
+		data->intq = create_int_queue(dev, data->intpipe, 1,
+					      USB_KBD_BOOT_REPORT_SIZE, data->new,
+					      data->intinterval);
+		if (!data->intq) {
+			printf("Failed to create int queue for device %04x:%04x\n",
+			       dev->descriptor.idVendor,
+			       dev->descriptor.idProduct);
+			return 0;
+		}
+#endif
 		return 1;
 	}
 	debug("USB KBD: enable interrupt pipe...\n");
