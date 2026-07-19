@@ -1080,6 +1080,13 @@ static int xhci_submit_root(struct usb_device *udev, unsigned long pipe,
 		case USB_PORT_FEAT_RESET:
 			reg |= PORT_RESET;
 			xhci_writel(status_reg, reg);
+			/*
+			 * Wait for the reset to complete (hardware clears
+			 * PORT_RESET). Doing so here means the generic hub code's
+			 * short reset delay already sees PORT_PE set and does not
+			 * fall back to its 200ms long-reset retry.
+			 */
+			handshake(status_reg, PORT_RESET, 0, XHCI_MAX_RESET_USEC);
 			break;
 		default:
 			printf("unknown feature %x\n", le16_to_cpu(req->value));
