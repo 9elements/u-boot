@@ -15,6 +15,7 @@
 
 #include <cpu_func.h>
 #include <log.h>
+#include <malloc.h>
 #include <asm/byteorder.h>
 #include <usb.h>
 #include <watchdog.h>
@@ -449,6 +450,43 @@ static int event_ready(struct xhci_ctrl *ctrl)
 	return 1;
 }
 
+static void record_transfer_result(struct usb_device *udev,
+				   union xhci_trb *event, int length);
+
+/**
+ * xhci_intq_take_event() - hand a stray transfer event to its interrupt queue
+ *
+ * A persistent interrupt queue (e.g. a USB keyboard) posts TRBs that may
+ * complete at any time, placing a transfer event on the shared event ring in
+ * the middle of an unrelated control/bulk transfer. If @event belongs to the
+ * active interrupt queue, record its result and stash it for the next
+ * xhci_poll_int_queue() so the blocking waiter does not mistake it for its own
+ * transfer. The caller must still acknowledge the event afterwards.
+ *
+ * Return: true if the event was consumed by the interrupt queue.
+ */
+static bool xhci_intq_take_event(struct xhci_ctrl *ctrl, union xhci_trb *event)
+{
+	struct int_queue *q = ctrl->intq;
+	u32 field;
+
+	if (!q || q->ready || q->current >= q->queuesize)
+		return false;
+
+	field = le32_to_cpu(event->trans_event.flags);
+	if (TRB_TO_SLOT_ID(field) != q->slot_id ||
+	    TRB_TO_EP_INDEX(field) != q->ep_index)
+		return false;
+
+	record_transfer_result(q->udev, event, q->elementsize);
+	xhci_inval_cache((uintptr_t)q->buffer + q->current * q->elementsize,
+			 q->elementsize);
+	q->ready = 1;
+	q->pending--;
+
+	return true;
+}
+
 /**
  * Waits for a specific type of event and returns it. Discards unexpected
  * events. Caller *must* call xhci_acknowledge_event() after it is finished
@@ -470,6 +508,17 @@ union xhci_trb *xhci_wait_for_event(struct xhci_ctrl *ctrl, trb_type expected)
 			continue;
 
 		type = TRB_FIELD_TO_TYPE(le32_to_cpu(event->event_cmd.flags));
+
+		/*
+		 * A completion for the active interrupt queue can land here in
+		 * the middle of the control/bulk transfer we are waiting on.
+		 * Hand it off rather than returning it to the wrong caller.
+		 */
+		if (type == TRB_TRANSFER && xhci_intq_take_event(ctrl, event)) {
+			xhci_acknowledge_event(ctrl);
+			continue;
+		}
+
 		if (type == expected ||
 		    (expected == TRB_NONE && type != TRB_PORT_STATUS))
 			return event;
@@ -619,6 +668,239 @@ static void record_transfer_result(struct usb_device *udev,
 	default:
 		udev->status = 0x80;  /* USB_ST_TOO_LAZY_TO_MAKE_A_NEW_MACRO */
 	}
+}
+
+/**** Non-blocking interrupt queue methods ****/
+
+/**
+ * xhci_create_int_queue() - post interrupt-IN TRBs and start the endpoint
+ *
+ * Queues @queuesize single-TRB transfers of @elementsize bytes on the
+ * interrupt endpoint's transfer ring and rings the doorbell. The TRBs stay
+ * posted so that xhci_poll_int_queue() can later reap completions without
+ * blocking. Only single-TRB elements are supported (@elementsize must not
+ * exceed wMaxPacketSize), which covers all current callers (HID keyboards).
+ *
+ * Return: an int_queue handle, or NULL on error.
+ */
+struct int_queue *xhci_create_int_queue(struct usb_device *udev,
+					unsigned long pipe, int queuesize,
+					int elementsize, void *buffer,
+					int interval)
+{
+	struct xhci_ctrl *ctrl = xhci_get_ctrl(udev);
+	int slot_id = udev->slot_id;
+	int ep_index = usb_pipe_ep_index(pipe);
+	struct xhci_virt_device *virt_dev = ctrl->devs[slot_id];
+	struct xhci_ep_ctx *ep_ctx;
+	struct xhci_ring *ring;
+	struct xhci_generic_trb *start_trb = NULL;
+	int start_cycle = 0;
+	int maxpacketsize;
+	struct int_queue *q;
+	int i;
+
+	if (usb_pipetype(pipe) != PIPE_INTERRUPT) {
+		printf("xhci_create_int_queue: non-interrupt pipe (type %lu)\n",
+		       usb_pipetype(pipe));
+		return NULL;
+	}
+
+	maxpacketsize = usb_maxpacket(udev, pipe);
+	if (elementsize > maxpacketsize) {
+		printf("xhci_create_int_queue: elementsize %d > maxpacket %d\n",
+		       elementsize, maxpacketsize);
+		return NULL;
+	}
+
+	q = malloc(sizeof(*q));
+	if (!q)
+		return NULL;
+	memset(q, 0, sizeof(*q));
+
+	q->udev = udev;
+	q->queuesize = queuesize;
+	q->elementsize = elementsize;
+	q->length = queuesize * elementsize;
+	q->pipe = pipe;
+	q->slot_id = slot_id;
+	q->ep_index = ep_index;
+	q->buffer = buffer;
+	q->buf_dma = xhci_dma_map(ctrl, buffer, q->length);
+
+	xhci_inval_cache((uintptr_t)virt_dev->out_ctx->bytes,
+			 virt_dev->out_ctx->size);
+	ep_ctx = xhci_get_ep_ctx(ctrl, virt_dev->out_ctx, ep_index);
+
+	if ((le32_to_cpu(ep_ctx->ep_info) & EP_STATE_MASK) == EP_STATE_HALTED)
+		reset_ep(udev, ep_index);
+
+	ring = virt_dev->eps[ep_index].ring;
+	if (!ring)
+		goto fail;
+
+	xhci_flush_cache((uintptr_t)buffer, q->length);
+
+	for (i = 0; i < queuesize; i++) {
+		u64 addr = q->buf_dma + i * elementsize;
+		u32 field = 0;
+		u32 length_field, remainder;
+		u32 trb_fields[4];
+
+		if (prepare_ring(ctrl, ring,
+				 le32_to_cpu(ep_ctx->ep_info) & EP_STATE_MASK) < 0)
+			goto fail;
+
+		if (i == 0) {
+			/*
+			 * Defer handing the first TRB to the hardware until all
+			 * TRBs are queued; giveback_first_trb() sets its cycle
+			 * bit last and rings the doorbell.
+			 */
+			start_trb = &ring->enqueue->generic;
+			start_cycle = ring->cycle_state;
+			if (start_cycle == 0)
+				field |= TRB_CYCLE;
+		} else {
+			field |= ring->cycle_state;
+		}
+
+		field |= TRB_IOC;
+		if (usb_pipein(pipe))
+			field |= TRB_ISP;
+
+		remainder = xhci_td_remainder(ctrl, 0, elementsize, elementsize,
+					      maxpacketsize, false);
+		length_field = TRB_LEN(elementsize) | TRB_TD_SIZE(remainder) |
+			       TRB_INTR_TARGET(0);
+
+		trb_fields[0] = lower_32_bits(addr);
+		trb_fields[1] = upper_32_bits(addr);
+		trb_fields[2] = length_field;
+		trb_fields[3] = field | TRB_TYPE(TRB_NORMAL);
+
+		queue_trb(ctrl, ring, false, trb_fields);
+		q->pending++;
+	}
+
+	giveback_first_trb(udev, ep_index, start_cycle, start_trb);
+
+	/*
+	 * Register as the active interrupt queue so blocking control/bulk
+	 * transfers can hand off completions that land on the shared event
+	 * ring while this endpoint is armed.
+	 */
+	ctrl->intq = q;
+
+	return q;
+fail:
+	xhci_dma_unmap(ctrl, q->buf_dma, q->length);
+	free(q);
+	return NULL;
+}
+
+/**
+ * xhci_poll_int_queue() - non-blocking check for a completed transfer
+ *
+ * Mirrors the event handling of xhci_wait_for_event() but never waits: it only
+ * consumes events already posted by the xHC. Returns a pointer to the element
+ * of the queue's buffer that just completed, or NULL if nothing is ready.
+ */
+void *xhci_poll_int_queue(struct usb_device *udev, struct int_queue *q)
+{
+	struct xhci_ctrl *ctrl = xhci_get_ctrl(udev);
+	union xhci_trb *event;
+	trb_type type;
+	void *result;
+
+	/* Queue fully consumed: caller must destroy/recreate it. */
+	if (q->current >= q->queuesize)
+		return NULL;
+
+	/*
+	 * A blocking control/bulk transfer may already have reaped this
+	 * queue's completion off the shared event ring and stashed it for us.
+	 */
+	if (q->ready) {
+		/* pending was already decremented when the event was reaped */
+		q->ready = 0;
+		result = q->buffer + q->current * q->elementsize;
+		q->current++;
+		return result;
+	}
+
+	while (event_ready(ctrl)) {
+		event = ctrl->event_ring->dequeue;
+		type = TRB_FIELD_TO_TYPE(le32_to_cpu(event->event_cmd.flags));
+
+		if (type != TRB_TRANSFER) {
+			if (type == TRB_PORT_STATUS)
+				/* see xhci_wait_for_event() */
+				BUG_ON(GET_COMP_CODE(le32_to_cpu(
+					event->generic.field[2])) != COMP_SUCCESS);
+			else
+				printf("Unexpected XHCI event TRB, skipping... "
+				       "(%08x %08x %08x %08x)\n",
+				       le32_to_cpu(event->generic.field[0]),
+				       le32_to_cpu(event->generic.field[1]),
+				       le32_to_cpu(event->generic.field[2]),
+				       le32_to_cpu(event->generic.field[3]));
+			xhci_acknowledge_event(ctrl);
+			continue;
+		}
+
+		/* A transfer event: make sure it is for this endpoint. */
+		if (TRB_TO_SLOT_ID(le32_to_cpu(event->trans_event.flags)) !=
+		    q->slot_id ||
+		    TRB_TO_EP_INDEX(le32_to_cpu(event->trans_event.flags)) !=
+		    q->ep_index) {
+			xhci_acknowledge_event(ctrl);
+			continue;
+		}
+
+		record_transfer_result(udev, event, q->elementsize);
+		xhci_acknowledge_event(ctrl);
+
+		result = q->buffer + q->current * q->elementsize;
+		xhci_inval_cache((uintptr_t)result, q->elementsize);
+
+		q->current++;
+		q->pending--;
+		return result;
+	}
+
+	return NULL;
+}
+
+/**
+ * xhci_destroy_int_queue() - stop the endpoint and free the queue
+ *
+ * Reclaims any TRBs still owned by the xHC and frees the handle. Does not free
+ * the data buffer, which is owned by the caller.
+ */
+int xhci_destroy_int_queue(struct usb_device *udev, struct int_queue *q)
+{
+	struct xhci_ctrl *ctrl = xhci_get_ctrl(udev);
+
+	/*
+	 * Unregister before aborting: abort_td() waits for this endpoint's own
+	 * stop event, which must not be diverted by xhci_intq_take_event().
+	 */
+	if (ctrl->intq == q)
+		ctrl->intq = NULL;
+
+	/*
+	 * abort_td() stops the endpoint and discards outstanding TRBs, but it
+	 * BUG()s when there is no transfer in progress, so only call it while
+	 * TRBs are still pending.
+	 */
+	if (q->pending > 0)
+		abort_td(udev, q->ep_index);
+
+	xhci_dma_unmap(ctrl, q->buf_dma, q->length);
+	free(q);
+
+	return 0;
 }
 
 /**** Bulk and Control transfer methods ****/

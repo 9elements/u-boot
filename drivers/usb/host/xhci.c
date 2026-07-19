@@ -1346,6 +1346,28 @@ static int xhci_submit_int_msg(struct udevice *dev, struct usb_device *udev,
 				    nonblock);
 }
 
+static struct int_queue *xhci_create_int_queue_(struct udevice *dev,
+		struct usb_device *udev, unsigned long pipe, int queuesize,
+		int elementsize, void *buffer, int interval)
+{
+	debug("%s: dev='%s', udev=%p\n", __func__, dev->name, udev);
+	return xhci_create_int_queue(udev, pipe, queuesize, elementsize, buffer,
+				     interval);
+}
+
+static void *xhci_poll_int_queue_(struct udevice *dev, struct usb_device *udev,
+				  struct int_queue *queue)
+{
+	return xhci_poll_int_queue(udev, queue);
+}
+
+static int xhci_destroy_int_queue_(struct udevice *dev, struct usb_device *udev,
+				   struct int_queue *queue)
+{
+	debug("%s: dev='%s', udev=%p\n", __func__, dev->name, udev);
+	return xhci_destroy_int_queue(udev, queue);
+}
+
 static int xhci_alloc_device(struct udevice *dev, struct usb_device *udev)
 {
 	debug("%s: dev='%s', udev=%p\n", __func__, dev->name, udev);
@@ -1482,6 +1504,9 @@ struct dm_usb_ops xhci_usb_ops = {
 	.control = xhci_submit_control_msg,
 	.bulk = xhci_submit_bulk_msg,
 	.interrupt = xhci_submit_int_msg,
+	.create_int_queue = xhci_create_int_queue_,
+	.poll_int_queue = xhci_poll_int_queue_,
+	.destroy_int_queue = xhci_destroy_int_queue_,
 	.alloc_device = xhci_alloc_device,
 	.update_hub_device = xhci_update_hub_device,
 	.get_max_xfer_size  = xhci_get_max_xfer_size,

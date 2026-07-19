@@ -1202,6 +1202,8 @@ void xhci_hcd_stop(int index);
 /* true: Controller Not Ready to accept doorbell or op reg writes after reset */
 #define XHCI_STS_CNR		(1 << 11)
 
+struct int_queue;
+
 struct xhci_ctrl {
 #if CONFIG_IS_ENABLED(DM_USB)
 	struct udevice *dev;
@@ -1222,6 +1224,14 @@ struct xhci_ctrl {
 	struct xhci_scratchpad *scratchpad;
 	struct xhci_virt_device *devs[MAX_HC_SLOTS];
 	struct usb_hub_descriptor hub_desc;
+	/*
+	 * Interrupt endpoints (e.g. a USB keyboard) post persistent TRBs that
+	 * may complete at any time onto the single, shared event ring. This
+	 * points to the active interrupt queue so the blocking control/bulk
+	 * waiters can hand off its stray completions instead of mistaking them
+	 * for their own transfer.
+	 */
+	struct int_queue *intq;
 	int rootdev;
 	u16 hci_version;
 	int page_size;
@@ -1258,6 +1268,35 @@ void xhci_acknowledge_event(struct xhci_ctrl *ctrl);
 union xhci_trb *xhci_wait_for_event(struct xhci_ctrl *ctrl, trb_type expected);
 int xhci_bulk_tx(struct usb_device *udev, unsigned long pipe,
 		 int length, void *buffer);
+
+/*
+ * Non-blocking interrupt transfer queue. Unlike xhci_bulk_tx(), which waits up
+ * to XHCI_TIMEOUT for completion, a queue keeps @queuesize transfer TRBs posted
+ * on the interrupt endpoint ring so that xhci_poll_int_queue() can check for a
+ * completed transfer without blocking. This is what makes polling a keyboard
+ * that only reports on key presses (and NAKs the idle IN endpoint) cheap.
+ */
+struct int_queue {
+	struct usb_device *udev;	/* device that owns this queue */
+	int queuesize;			/* number of TRBs posted */
+	int elementsize;		/* bytes per element in @buffer */
+	int length;			/* queuesize * elementsize */
+	unsigned long pipe;
+	int slot_id;
+	int ep_index;
+	void *buffer;			/* caller-owned data buffer */
+	u64 buf_dma;			/* dma mapping of @buffer */
+	int current;			/* next element to report */
+	int pending;			/* TRBs still owned by the xHC */
+	int ready;			/* completion stashed by a blocking wait */
+};
+
+struct int_queue *xhci_create_int_queue(struct usb_device *udev,
+					unsigned long pipe, int queuesize,
+					int elementsize, void *buffer,
+					int interval);
+void *xhci_poll_int_queue(struct usb_device *udev, struct int_queue *queue);
+int xhci_destroy_int_queue(struct usb_device *udev, struct int_queue *queue);
 int xhci_ctrl_tx(struct usb_device *udev, unsigned long pipe,
 		 struct devrequest *req, int length, void *buffer);
 int xhci_check_maxpacket(struct usb_device *udev);
