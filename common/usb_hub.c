@@ -205,10 +205,12 @@ static void usb_hub_power_on(struct usb_hub_device *hub)
 	debug("pgood_delay=%dms\n", pgood_delay);
 
 	/*
-	 * Do a minimum delay of the larger value of 100ms or pgood_delay
+	 * Do a minimum delay of the larger value of
+	 * CONFIG_USB_HUB_MIN_POWER_ON_DELAY (100ms by default) or pgood_delay
 	 * so that the power can stablize before the devices are queried
 	 */
-	hub->query_delay = get_timer(0) + max(100, (int)pgood_delay);
+	hub->query_delay = get_timer(0) +
+		max(CONFIG_USB_HUB_MIN_POWER_ON_DELAY, (int)pgood_delay);
 
 	/*
 	 * Record the power-on timeout here. The max. delay (timeout)
@@ -217,8 +219,10 @@ static void usb_hub_power_on(struct usb_hub_device *hub)
 	 */
 	hub->connect_timeout = hub->query_delay + HUB_DEBOUNCE_TIMEOUT;
 	debug("devnum=%d poweron: query_delay=%d connect_timeout=%d\n",
-	      dev->devnum, max(100, (int)pgood_delay),
-	      max(100, (int)pgood_delay) + HUB_DEBOUNCE_TIMEOUT);
+	      dev->devnum,
+	      max(CONFIG_USB_HUB_MIN_POWER_ON_DELAY, (int)pgood_delay),
+	      max(CONFIG_USB_HUB_MIN_POWER_ON_DELAY, (int)pgood_delay) +
+	      HUB_DEBOUNCE_TIMEOUT);
 }
 
 #if !CONFIG_IS_ENABLED(DM_USB)
@@ -486,7 +490,21 @@ static int usb_scan_port(struct usb_device_scan *usb_scan)
 	 */
 	if (!(portchange & USB_PORT_STAT_C_CONNECTION) &&
 	    !(portstatus & USB_PORT_STAT_CONNECTION)) {
-		if (get_timer(0) >= hub->connect_timeout) {
+		bool empty = get_timer(0) >= hub->connect_timeout;
+
+#if CONFIG_IS_ENABLED(DM_USB) && CONFIG_IS_ENABLED(USB_HUB_SKIP_ROOT_EMPTY_WAIT)
+		/*
+		 * On a root hub the host controller maintains port connection
+		 * status continuously. We are already past the power-on query
+		 * delay here, so a root port reporting no connection is
+		 * genuinely empty and need not wait out the connect timeout.
+		 * That wait only benefits downstream hubs, whose ports are
+		 * powered on by U-Boot and may see a device attach with delay.
+		 */
+		if (usb_hub_is_root_hub(dev->dev))
+			empty = true;
+#endif
+		if (empty) {
 			debug("devnum=%d port=%d: timeout\n",
 			      dev->devnum, i + 1);
 			/* Remove this device from scanning list */

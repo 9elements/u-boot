@@ -129,6 +129,39 @@ config USB_HUB_DEBOUNCE_TIMEOUT
 	  value = 1s because some usb device needs around 1.5s to be initialized
 	  and a 2s value should solve detection issue on problematic USB keys.
 
+config USB_HUB_MIN_POWER_ON_DELAY
+	int "Minimum power-on-good delay in milliseconds for USB hubs"
+	default 100
+	help
+	  Minimum delay, in milliseconds, the hub driver waits after powering
+	  on a hub's ports before querying them, so that port power can settle.
+	  The effective delay is the larger of this value and the hub's own
+	  bPwrOn2PwrGood descriptor value, so lowering it never violates a hub
+	  that declares a longer settle time.
+
+	  The USB spec default of 100ms is conservative for platforms where
+	  firmware (e.g. a coreboot payload) has already powered and stabilised
+	  the ports before U-Boot runs. Such platforms can lower this to shorten
+	  "usb start" without affecting hubs that request a longer delay.
+
+config USB_HUB_SKIP_ROOT_EMPTY_WAIT
+	bool "Skip connect-timeout wait for empty root hub ports"
+	depends on DM_USB
+	help
+	  During enumeration a port that reports no connection is polled until
+	  the connect timeout (power-on delay plus USB_HUB_DEBOUNCE_TIMEOUT)
+	  expires, to give a device time to attach. This wait is only consumed
+	  by ports that stay empty.
+
+	  On a root hub the host controller maintains port connection status
+	  continuously, so once the power-on delay has elapsed a root port that
+	  reports no connection is genuinely empty. Say Y to drop such ports
+	  immediately instead of waiting out the connect timeout, shortening
+	  "usb start" on platforms whose root ports are already powered before
+	  U-Boot runs. Downstream (external) hubs are unaffected and keep the
+	  full attach window. Say N if U-Boot itself cold-powers the root ports
+	  and must wait for slow devices to signal attach.
+
 if SPL_USB_HOST
 
 comment "USB peripherals in SPL"
