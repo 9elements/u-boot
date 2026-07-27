@@ -132,8 +132,19 @@ void efi_add_known_memory(void)
 			 * below). RAM above ram_top is intentionally left out of
 			 * LMB - U-Boot relocates within the 32-bit space and must
 			 * not allocate from it - so it never reaches the map that
-			 * way. Add that upper region here as conventional memory
-			 * so the OS still sees it as usable.
+			 * way. Add that upper region here so the OS still sees it
+			 * as usable.
+			 *
+			 * It must not be reported as EFI_CONVENTIONAL_MEMORY:
+			 * efi_allocate_pages() satisfies every request out of
+			 * LMB, which does not own this region, so an EFI payload
+			 * that picks the largest free region out of the memory
+			 * map (GRUB grows its heap exactly that way) would get a
+			 * hard failure. U-Boot's page tables only cover the low
+			 * 4GiB anyway, so the memory really is unusable until the
+			 * OS takes over. EFI_BOOT_SERVICES_DATA expresses that:
+			 * no payload allocates from it, and both GRUB and Linux
+			 * reclaim it as usable RAM after ExitBootServices().
 			 */
 			rgn_top = start + e820[i].size;
 			if (rgn_top <= ram_top)
@@ -141,7 +152,7 @@ void efi_add_known_memory(void)
 			if (start < ram_top)
 				start = ram_top;
 			efi_add_memory_map(start, rgn_top - start,
-					   EFI_CONVENTIONAL_MEMORY);
+					   EFI_BOOT_SERVICES_DATA);
 			continue;
 		case E820_RESERVED:
 			type = EFI_RESERVED_MEMORY_TYPE;
