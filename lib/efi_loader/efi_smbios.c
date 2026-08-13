@@ -24,6 +24,31 @@ enum {
 };
 
 /*
+ * Some firmware (e.g. coreboot) writes a legacy "_SM_" (2.1) entry point
+ * immediately followed by a "_SM3_" (3.0) entry point in the same table,
+ * but only ever hands U-Boot the address of the 2.1 entry point. Tagging
+ * that address with the SMBIOS3 GUID makes strict SMBIOS3 parsers (e.g.
+ * the Linux kernel) reject it, since they require the "_SM3_" anchor at
+ * whatever address carries that GUID. Look for a "_SM3_" entry point
+ * trailing the 2.1 one and prefer it if found.
+ *
+ * Return:	pointer to the 3.0 entry point, or NULL if not found
+ */
+static const struct smbios3_entry *find_trailing_smbios3(const struct smbios_entry *entry)
+{
+	const u8 *buf = (const u8 *)entry;
+	uint offset;
+
+	for (offset = entry->length; offset + sizeof(struct smbios3_entry) <= TABLE_SIZE;
+	     offset++) {
+		if (!memcmp(buf + offset, "_SM3_", 5))
+			return (const struct smbios3_entry *)(buf + offset);
+	}
+
+	return NULL;
+}
+
+/*
  * Install the SMBIOS table as a configuration table.
  *
  * Return:	status code
@@ -33,6 +58,8 @@ efi_status_t efi_smbios_register(void)
 	ulong addr;
 	efi_status_t ret;
 	void *buf;
+	const void *table;
+	const efi_guid_t *guid;
 
 	addr = gd_smbios_start();
 	if (!addr) {
@@ -45,11 +72,31 @@ efi_status_t efi_smbios_register(void)
 	if (ret)
 		return ret;
 
-	log_debug("EFI using SMBIOS tables at %lx\n", addr);
+	buf = map_sysmem(addr, 0);
+
+	if (!memcmp(buf, "_SM3_", 5)) {
+		guid = &smbios3_guid;
+		table = buf;
+	} else if (!memcmp(buf, "_SM_", 4)) {
+		const struct smbios3_entry *entry3 = find_trailing_smbios3(buf);
+
+		if (entry3) {
+			guid = &smbios3_guid;
+			table = entry3;
+		} else {
+			guid = &smbios_guid;
+			table = buf;
+		}
+	} else {
+		log_err("Invalid SMBIOS anchor at %lx\n", addr);
+		unmap_sysmem(buf);
+		return EFI_NOT_FOUND;
+	}
+
+	log_debug("EFI using SMBIOS tables at %p\n", table);
 
 	/* Install SMBIOS information as configuration table */
-	buf = map_sysmem(addr, 0);
-	ret = efi_install_configuration_table(&smbios3_guid, buf);
+	ret = efi_install_configuration_table(guid, (void *)table);
 	unmap_sysmem(buf);
 
 	return ret;
