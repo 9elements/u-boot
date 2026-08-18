@@ -495,6 +495,7 @@ static int do_pci(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	ulong addr = 0, value = 0, cmd_size = 0;
 	enum pci_size_t size = PCI_SIZE_32;
 	struct udevice *dev, *bus;
+	struct uclass *uc;
 	int busnum = -1;
 	pci_dev_t bdf = 0;
 	char cmd = 's';
@@ -549,15 +550,26 @@ static int do_pci(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 				goto usage;
 		}
 		if (busnum == -1) {
+			/*
+			 * Walk every bus actually bound in the uclass rather
+			 * than guessing sequential bus numbers: real hardware
+			 * routinely leaves gaps (a bridge's subordinate range
+			 * can reserve bus numbers that no device ever claims,
+			 * or a bus may simply not have been probed yet), and
+			 * looking up by sequence number one at a time would
+			 * stop at the first missing number instead of showing
+			 * everything that is actually present.
+			 */
 			if (cmd != 'r') {
-				for (busnum = 0;
-				     uclass_get_device_by_seq(UCLASS_PCI, busnum, &bus) == 0;
-				     busnum++)
+				uclass_id_foreach_dev(UCLASS_PCI, bus, uc) {
+					if (dev_seq(bus) == -1)
+						continue;
 					pciinfo(bus, value, true);
+				}
 			} else {
-				for (busnum = 0;
-				     uclass_get_device_by_seq(UCLASS_PCI, busnum, &bus) == 0;
-				     busnum++) {
+				uclass_id_foreach_dev(UCLASS_PCI, bus, uc) {
+					if (dev_seq(bus) == -1)
+						continue;
 					/* Regions are controller specific so skip non-root buses */
 					if (device_is_on_pci_bus(bus))
 						continue;

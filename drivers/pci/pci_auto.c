@@ -11,6 +11,7 @@
 #include <config.h>
 #include <dm.h>
 #include <errno.h>
+#include <init.h>
 #include <log.h>
 #include <pci.h>
 #include <time.h>
@@ -541,7 +542,13 @@ int dm_pciauto_config_device(struct udevice *dev)
 		debug("PCI Autoconfig: Found P2P bridge, device %d\n",
 		      PCI_DEV(dm_pci_get_bdf(dev)));
 
-		dm_pciauto_setup_device(dev, pci_mem, pci_prefetch, pci_io);
+		/*
+		 * Don't resize/relocate BARs when a prior stage already did
+		 * low-level init (ll_boot_init() == false) -- trust its
+		 * resource assignment and just recurse to discover devices.
+		 */
+		if (ll_boot_init())
+			dm_pciauto_setup_device(dev, pci_mem, pci_prefetch, pci_io);
 
 		ret = dm_pci_hose_probe_bus(dev);
 		if (ret < 0)
@@ -554,7 +561,8 @@ int dm_pciauto_config_device(struct udevice *dev)
 		 * just do a minimal setup of the bridge,
 		 * let the OS take care of the rest
 		 */
-		dm_pciauto_setup_device(dev, pci_mem, pci_prefetch, pci_io);
+		if (ll_boot_init())
+			dm_pciauto_setup_device(dev, pci_mem, pci_prefetch, pci_io);
 
 		debug("PCI Autoconfig: Found P2CardBus bridge, device %d\n",
 		      PCI_DEV(dm_pci_get_bdf(dev)));
@@ -582,7 +590,8 @@ int dm_pciauto_config_device(struct udevice *dev)
 #endif
 
 	default:
-		dm_pciauto_setup_device(dev, pci_mem, pci_prefetch, pci_io);
+		if (ll_boot_init())
+			dm_pciauto_setup_device(dev, pci_mem, pci_prefetch, pci_io);
 		break;
 	}
 

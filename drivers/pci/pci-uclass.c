@@ -96,6 +96,27 @@ static int pci_get_bus_max(void)
 	return ret;
 }
 
+/**
+ * pci_bus_seq_taken() - check whether a PCI bus sequence number is in use
+ *
+ * @seq: Sequence number (i.e. bus number) to check
+ * Return: true if some UCLASS_PCI device already has this sequence number
+ */
+static bool pci_bus_seq_taken(int seq)
+{
+	struct udevice *bus;
+	struct uclass *uc;
+
+	if (uclass_get(UCLASS_PCI, &uc))
+		return false;
+	uclass_foreach_dev(bus, uc) {
+		if (dev_seq(bus) == seq)
+			return true;
+	}
+
+	return false;
+}
+
 int pci_last_busno(void)
 {
 	return pci_get_bus_max();
@@ -667,20 +688,33 @@ int dm_pci_hose_probe_bus(struct udevice *bus)
 		return log_msg_ret("probe", -EINVAL);
 	}
 
-	if (IS_ENABLED(CONFIG_PCI_ENHANCED_ALLOCATION))
-		ea_pos = dm_pci_find_capability(bus, PCI_CAP_ID_EA);
-	else
-		ea_pos = 0;
+	/*
+	 * When a prior stage already did low-level init (ll_boot_init() ==
+	 * false, e.g. a coreboot/FSP payload), bus numbers and resources are
+	 * already correctly programmed in hardware -- don't recompute and
+	 * rewrite the secondary/subordinate bus registers, just recurse into
+	 * device_probe() below to discover what's there. pci_uclass_pre_probe()
+	 * reads this bridge's already-programmed PCI_SECONDARY_BUS back as its
+	 * dev_seq() in that case.
+	 */
+	if (ll_boot_init()) {
+		if (IS_ENABLED(CONFIG_PCI_ENHANCED_ALLOCATION))
+			ea_pos = dm_pci_find_capability(bus, PCI_CAP_ID_EA);
+		else
+			ea_pos = 0;
 
-	if (ea_pos) {
-		dm_pci_read_config8(bus, ea_pos + sizeof(u32) + sizeof(u8),
-				    &reg);
-		sub_bus = reg;
+		if (ea_pos) {
+			dm_pci_read_config8(bus, ea_pos + sizeof(u32) + sizeof(u8),
+					    &reg);
+			sub_bus = reg;
+		} else {
+			sub_bus = pci_get_bus_max() + 1;
+		}
+		debug("%s: bus = %d/%s\n", __func__, sub_bus, bus->name);
+		dm_pciauto_prescan_setup_bridge(bus, sub_bus);
 	} else {
-		sub_bus = pci_get_bus_max() + 1;
+		ea_pos = 0;
 	}
-	debug("%s: bus = %d/%s\n", __func__, sub_bus, bus->name);
-	dm_pciauto_prescan_setup_bridge(bus, sub_bus);
 
 	ret = device_probe(bus);
 	if (ret) {
@@ -688,6 +722,9 @@ int dm_pci_hose_probe_bus(struct udevice *bus)
 		      ret);
 		return log_msg_ret("probe", ret);
 	}
+
+	if (!ll_boot_init())
+		return dev_seq(bus);
 
 	if (!ea_pos)
 		sub_bus = pci_get_bus_max();
@@ -1156,12 +1193,52 @@ static int pci_uclass_pre_probe(struct udevice *bus)
 	 * of this so that numbers are allocated as devices are probed. That
 	 * ensures that sub-bus numbered is correct (sub-buses must get numbers
 	 * higher than their parents)
+	 *
+	 * If this is a bridge whose secondary bus number is already
+	 * programmed in hardware, that value is ground truth for the real
+	 * bus number and must be used instead of a freshly-picked sequential
+	 * one. This matters whenever something other than our own PCI_PNP
+	 * auto-config wrote that register: most notably, boards that boot
+	 * via a prior stage such as coreboot set GD_FLG_SKIP_LL_INIT, which
+	 * makes ll_boot_init() false and disables pci_auto_config_devices()
+	 * for the whole tree (see pci_uclass_post_probe() below). In that
+	 * case bridges only ever get probed lazily, one at a time, as a
+	 * side effect of whatever driver happens to need a device behind
+	 * them, and a plain "next free integer" has no relationship to the
+	 * bus number the earlier stage actually configured that bridge to
+	 * forward -- config-space accesses to its children would then
+	 * target the wrong ECAM bus entirely. When our own auto-config path
+	 * *does* run, dm_pci_hose_probe_bus() has already written this same
+	 * register before probing, so reading it back here is a no-op that
+	 * simply confirms the value it just chose.
 	 */
 	if (dev_seq(bus) == -1) {
-		ret = uclass_get(UCLASS_PCI, &uc);
-		if (ret)
-			return ret;
-		bus->seq_ = uclass_find_next_free_seq(uc);
+		int seq = -1;
+
+		if (device_is_on_pci_bus(bus)) {
+			u8 header_type = 0;
+			u8 sec_bus = 0;
+
+			dm_pci_read_config8(bus, PCI_HEADER_TYPE, &header_type);
+			if ((header_type & 0x7f) == PCI_HEADER_TYPE_BRIDGE) {
+				dm_pci_read_config8(bus, PCI_SECONDARY_BUS,
+						    &sec_bus);
+				if (sec_bus)
+					seq = sec_bus;
+			}
+		}
+
+		if (seq != -1 && pci_bus_seq_taken(seq))
+			log_err("PCI: %s: hardware-assigned bus number %d is already in use\n",
+				bus->name, seq);
+
+		if (seq == -1) {
+			ret = uclass_get(UCLASS_PCI, &uc);
+			if (ret)
+				return ret;
+			seq = uclass_find_next_free_seq(uc);
+		}
+		bus->seq_ = seq;
 	}
 
 	/* For bridges, use the top-level PCI controller */
@@ -1200,7 +1277,15 @@ static int pci_uclass_post_probe(struct udevice *bus)
 	if (ret)
 		return log_msg_ret("bind", ret);
 
-	if (CONFIG_IS_ENABLED(PCI_PNP) && ll_boot_init() &&
+	/*
+	 * Always walk the bus so every device gets discovered, even on
+	 * boards where ll_boot_init() is false (e.g. a coreboot/FSP payload
+	 * that already did low-level init): dm_pciauto_config_device() and
+	 * dm_pci_hose_probe_bus() check ll_boot_init() themselves and skip
+	 * writing bus numbers/BARs in that case, recursing for discovery
+	 * only and trusting the earlier stage's configuration.
+	 */
+	if (CONFIG_IS_ENABLED(PCI_PNP) &&
 	    (!hose->skip_auto_config_until_reloc ||
 	     (gd->flags & GD_FLG_RELOC))) {
 		ret = pci_auto_config_devices(bus);
