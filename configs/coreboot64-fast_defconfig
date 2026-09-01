@@ -75,3 +75,5 @@ CONFIG_CONSOLE_SCROLL_LINES=5
 CONFIG_SPL_ACPI=y
 # CONFIG_GZIP is not set
 CONFIG_SMBIOS_PARSER=y
+CONFIG_USE_BOOTCOMMAND=y
+CONFIG_BOOTCOMMAND="bootflow scan -lb; setenv silent; usb start; echo 'Primary boot failed. Booting USB in 5s. Press Ctrl+C to abort...'; sleep 5 && bootflow scan -lb"
