@@ -23,6 +23,9 @@
 #include <host_arch.h>
 #include <linux/libfdt.h>
 #include <linux/list.h>
+#ifdef CONFIG_SYS_COREBOOT
+#include <asm/arch/timestamp.h>
+#endif
 
 #undef BOOTEFI_NAME
 
@@ -687,6 +690,21 @@ efi_status_t do_bootefi_exec(efi_handle_t handle, void *load_options)
 		log_err("failed to set watchdog timer\n");
 		goto out;
 	}
+
+#ifdef CONFIG_SYS_COREBOOT
+	/*
+	 * Last point at which U-Boot is in control. Record it in coreboot's
+	 * cbmem timestamp table so the payload's boot time can be measured
+	 * from the OS, the same way boot_linux_kernel() already does it for
+	 * the bootm and zboot paths.
+	 *
+	 * Note this is reached once per boot attempt, not once per boot:
+	 * bootstd keeps scanning when a bootflow fails to start and a bootcmd
+	 * may retry from another device. Consumers must therefore use the
+	 * last TS_U_BOOT_START_KERNEL entry in the table.
+	 */
+	timestamp_add_now(TS_U_BOOT_START_KERNEL);
+#endif
 
 	/* Call our payload! */
 	ret = EFI_CALL(efi_start_image(handle, &exit_data_size, &exit_data));
