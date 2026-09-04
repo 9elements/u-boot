@@ -151,6 +151,24 @@ static const struct timestamp_id_to_name {
 	{ TS_START_KERNEL,	"jumping to kernel" },
 	{ TS_U_BOOT_START_KERNEL,	"just before jump to kernel" },
 
+	/* U-Boot boot-path profiling */
+	{ TS_U_BOOT_MAIN_LOOP,	"U-Boot init done, entering main loop" },
+	{ TS_U_BOOT_BOOTFLOW_SCAN_START, "starting bootflow scan" },
+	{ TS_U_BOOT_BOOTFLOW_SCAN_END,	"finished bootflow scan" },
+	{ TS_U_BOOT_BOOTDEV_HUNT_START,	"starting bootdev hunter" },
+	{ TS_U_BOOT_BOOTDEV_HUNT_END,	"finished bootdev hunter" },
+	{ TS_U_BOOT_BOOTFLOW_FOUND,	"found a bootable bootflow" },
+	{ TS_U_BOOT_EFI_INIT_START,	"starting EFI sub-system init" },
+	{ TS_U_BOOT_EFI_DISKS_START,	"starting EFI block-device probe" },
+	{ TS_U_BOOT_EFI_DISKS_END,	"finished EFI block-device probe" },
+	{ TS_U_BOOT_EFI_VARS_START,	"starting EFI variable init" },
+	{ TS_U_BOOT_EFI_VARS_END,	"finished EFI variable init" },
+	{ TS_U_BOOT_EFI_BOOTOPT_START,	"starting EFI boot-option update" },
+	{ TS_U_BOOT_EFI_BOOTOPT_END,	"finished EFI boot-option update" },
+	{ TS_U_BOOT_EFI_INIT_END,	"finished EFI sub-system init" },
+	{ TS_U_BOOT_EFI_LOAD_IMAGE_START, "starting EFI image load" },
+	{ TS_U_BOOT_EFI_LOAD_IMAGE_END,	"finished EFI image load" },
+
 	/* Intel ME-related timestamps */
 	{ TS_ME_INFORM_DRAM_WAIT, "waiting for ME acknowledgment of raminit"},
 	{ TS_ME_INFORM_DRAM_DONE, "finished waiting for ME response"},
