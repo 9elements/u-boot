@@ -7,6 +7,7 @@
 #define LOG_CATEGORY LOGC_EFI
 
 #include <bootflow.h>
+#include <cb_timestamp.h>
 #include <charset.h>
 #include <dm.h>
 #include <efi.h>
@@ -180,8 +181,10 @@ static efi_status_t efi_run_image(void *source_buffer, efi_uintn_t source_size,
 
 	log_info("Booting %pD\n", msg_path);
 
+	cb_timestamp(TS_U_BOOT_EFI_LOAD_IMAGE_START);
 	ret = EFI_CALL(efi_load_image(false, efi_root, file_path, source_buffer,
 				      source_size, &handle));
+	cb_timestamp(TS_U_BOOT_EFI_LOAD_IMAGE_END);
 	if (ret != EFI_SUCCESS) {
 		log_err("Loading image failed\n");
 		goto out;

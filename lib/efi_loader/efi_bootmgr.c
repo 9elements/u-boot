@@ -9,6 +9,7 @@
 
 #include <blk.h>
 #include <blkmap.h>
+#include <cb_timestamp.h>
 #include <charset.h>
 #include <dm.h>
 #include <efi.h>
@@ -1159,6 +1160,14 @@ efi_status_t efi_bootmgr_update_media_device_boot_option(void)
 	efi_handle_t *handles = NULL;
 	struct eficonfig_media_boot_option *opt = NULL;
 
+	/*
+	 * Not a one-shot: besides the call from efi_init_obj_list() this runs
+	 * again from efi_disk_probe() for every block device that is probed
+	 * after the EFI sub-system came up - i.e. once per device discovered
+	 * by the bootstd hunters. Expect several pairs of these timestamps.
+	 */
+	cb_timestamp(TS_U_BOOT_EFI_BOOTOPT_START);
+
 	ret = efi_locate_handle_buffer_int(BY_PROTOCOL,
 					   &efi_block_io_guid,
 					   NULL, &count,
@@ -1231,6 +1240,8 @@ out:
 	}
 	free(opt);
 	efi_free_pool(handles);
+
+	cb_timestamp(TS_U_BOOT_EFI_BOOTOPT_END);
 
 	if (ret == EFI_NOT_FOUND)
 		return EFI_SUCCESS;
@@ -1313,7 +1324,9 @@ efi_status_t efi_bootmgr_run(void *fdt)
 	if (ret != EFI_SUCCESS)
 		return ret;
 
+	cb_timestamp(TS_U_BOOT_EFI_LOAD_IMAGE_START);
 	ret = efi_bootmgr_load(&handle, &load_options);
+	cb_timestamp(TS_U_BOOT_EFI_LOAD_IMAGE_END);
 	if (ret != EFI_SUCCESS) {
 		log_notice("EFI boot manager: Cannot load any image\n");
 		return ret;

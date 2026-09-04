@@ -10,6 +10,7 @@
 #include <button.h>
 #include <bootstage.h>
 #include <bootstd.h>
+#include <cb_timestamp.h>
 #include <cli.h>
 #include <command.h>
 #include <console.h>
@@ -45,6 +46,14 @@ void main_loop(void)
 	const char *s;
 
 	bootstage_mark_name(BOOTSTAGE_ID_MAIN_LOOP, "main_loop");
+
+	/*
+	 * Split U-Boot's core init (everything since TS_U_BOOT_INITTED) from
+	 * the boot path that follows. Note arch_cpu_init() records
+	 * TS_U_BOOT_INITTED in SPL as well as in U-Boot proper, so on an
+	 * SPL-enabled build the second one is the start of this phase.
+	 */
+	cb_timestamp(TS_U_BOOT_MAIN_LOOP);
 
 	if (IS_ENABLED(CONFIG_VERSION_VARIABLE))
 		env_set("ver", version_string);  /* set version variable */
