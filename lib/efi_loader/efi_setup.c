@@ -7,6 +7,7 @@
 
 #define LOG_CATEGORY LOGC_EFI
 
+#include <cb_timestamp.h>
 #include <efi_loader.h>
 #include <efi_variable.h>
 #include <log.h>
@@ -243,6 +244,15 @@ efi_status_t efi_init_obj_list(void)
 	if (efi_obj_list_initialized != OBJ_LIST_NOT_INITIALIZED)
 		return efi_obj_list_initialized;
 
+	/*
+	 * Everything below runs exactly once per boot, but it is triggered
+	 * lazily by whoever touches the EFI sub-system first - on bootstd that
+	 * is the global 'efi_mgr' bootmeth at the very start of
+	 * 'bootflow scan'. Bracket it so the cost does not get charged to
+	 * whatever command happened to be running.
+	 */
+	cb_timestamp(TS_U_BOOT_EFI_INIT_START);
+
 	/* Set up console modes */
 	efi_setup_console_size();
 
@@ -250,12 +260,16 @@ efi_status_t efi_init_obj_list(void)
 	 * Probe block devices to find the ESP.
 	 * efi_disks_register() must be called before efi_init_variables().
 	 */
+	cb_timestamp(TS_U_BOOT_EFI_DISKS_START);
 	ret = efi_disks_register();
+	cb_timestamp(TS_U_BOOT_EFI_DISKS_END);
 	if (ret != EFI_SUCCESS)
 		goto out;
 
 	/* Initialize variable services */
+	cb_timestamp(TS_U_BOOT_EFI_VARS_START);
 	ret = efi_init_variables();
+	cb_timestamp(TS_U_BOOT_EFI_VARS_END);
 	if (ret != EFI_SUCCESS)
 		goto out;
 
@@ -391,6 +405,7 @@ efi_status_t efi_init_obj_list(void)
 
 	ret = efi_start_obj_list();
 out:
+	cb_timestamp(TS_U_BOOT_EFI_INIT_END);
 	efi_obj_list_initialized = ret;
 	if (ret != EFI_SUCCESS)
 		log_err("Cannot initialize UEFI sub-system\n");

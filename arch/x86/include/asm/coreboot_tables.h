@@ -109,6 +109,48 @@ enum timestamp_id {
 	TS_START_KERNEL = 1101,
 	TS_KERNEL_DECOMPRESSION = 1102,
 	TS_U_BOOT_START_KERNEL = 1100, /* Right before jumping to kernel */
+
+	/*
+	 * 10000+: U-Boot boot-path profiling (temporary).
+	 *
+	 * These bracket the phases between TS_U_BOOT_INITTED and
+	 * TS_U_BOOT_START_KERNEL, so the payload's contribution to boot time
+	 * can be attributed instead of just measured as a lump.
+	 *
+	 * The whole 1000-1200 range is reserved for ChromeOS depthcharge, and
+	 * the U-Boot IDs above already sit inside it (TS_U_BOOT_START_KERNEL
+	 * even aliases TS_VB_VBOOT_DONE). Rather than squeeze more IDs in
+	 * there, park these well clear of every allocated range until it is
+	 * decided which of them are worth keeping and registering properly.
+	 *
+	 * Every one of these can legitimately appear more than once: bootstd
+	 * keeps scanning after a failed bootflow and a bootcmd may retry from
+	 * another device (coreboot-fast falls back to USB). Consumers should
+	 * pair entries in order of appearance rather than assume a single
+	 * occurrence.
+	 */
+	TS_U_BOOT_MAIN_LOOP = 10000,	/* Core init done, about to run bootcmd */
+
+	/* Finding something to boot */
+	TS_U_BOOT_BOOTFLOW_SCAN_START = 10001,	/* 'bootflow scan' entered */
+	TS_U_BOOT_BOOTFLOW_SCAN_END = 10002,	/* ...iteration finished */
+	TS_U_BOOT_BOOTDEV_HUNT_START = 10003,	/* One bootdev hunter runs */
+	TS_U_BOOT_BOOTDEV_HUNT_END = 10004,	/* ...bus enumeration done */
+	TS_U_BOOT_BOOTFLOW_FOUND = 10005,	/* A bootable bootflow was found */
+
+	/* EFI sub-system bring-up (efi_init_obj_list(), runs once) */
+	TS_U_BOOT_EFI_INIT_START = 10010,
+	TS_U_BOOT_EFI_DISKS_START = 10011,	/* efi_disks_register() */
+	TS_U_BOOT_EFI_DISKS_END = 10012,
+	TS_U_BOOT_EFI_VARS_START = 10013,	/* efi_init_variables(): ESP read */
+	TS_U_BOOT_EFI_VARS_END = 10014,
+	TS_U_BOOT_EFI_BOOTOPT_START = 10015,	/* Boot#### option maintenance */
+	TS_U_BOOT_EFI_BOOTOPT_END = 10016,
+	TS_U_BOOT_EFI_INIT_END = 10017,
+
+	/* Loading the EFI payload */
+	TS_U_BOOT_EFI_LOAD_IMAGE_START = 10020, /* Read + PE relocate + verify */
+	TS_U_BOOT_EFI_LOAD_IMAGE_END = 10021,
 };
 
 struct memory_area;

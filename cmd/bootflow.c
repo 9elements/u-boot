@@ -10,6 +10,7 @@
 #include <bootflow.h>
 #include <bootm.h>
 #include <bootstd.h>
+#include <cb_timestamp.h>
 #include <command.h>
 #include <console.h>
 #include <dm.h>
@@ -218,13 +219,22 @@ static int do_bootflow_scan(struct cmd_tbl *cmdtp, int flag, int argc,
 		bootstd_clear_bootflows_for_bootdev(dev);
 	else
 		bootstd_clear_glob();
+	/*
+	 * Bracket the whole hunt for something to boot. With -b this only ends
+	 * if nothing bootable was found, since a successful bootflow does not
+	 * return; the bootcmd may then run a second scan against another
+	 * device, giving a second pair of these timestamps.
+	 */
+	cb_timestamp(TS_U_BOOT_BOOTFLOW_SCAN_START);
 	for (i = 0,
 	     ret = bootflow_scan_first(dev, label, &iter, flags, &bflow);
 	     i < 1000 && ret != -ENODEV;
 	     i++, ret = bootflow_scan_next(&iter, &bflow)) {
 		bflow.err = ret;
-		if (!ret)
+		if (!ret) {
 			num_valid++;
+			cb_timestamp(TS_U_BOOT_BOOTFLOW_FOUND);
+		}
 		ret = bootstd_add_bootflow(&bflow);
 		if (ret < 0) {
 			printf("Out of memory\n");
@@ -235,6 +245,7 @@ static int do_bootflow_scan(struct cmd_tbl *cmdtp, int flag, int argc,
 		if (!menu && boot && !bflow.err)
 			bootflow_run_boot(&iter, &bflow);
 	}
+	cb_timestamp(TS_U_BOOT_BOOTFLOW_SCAN_END);
 	bootflow_iter_uninit(&iter);
 	if (list)
 		show_footer(i, num_valid);

@@ -11,6 +11,7 @@
 #include <bootflow.h>
 #include <bootmeth.h>
 #include <bootstd.h>
+#include <cb_timestamp.h>
 #include <fs.h>
 #include <log.h>
 #include <malloc.h>
@@ -798,7 +799,17 @@ static int bootdev_hunt_drv(struct bootdev_hunter *info, uint seq, bool show)
 			       uclass_get_name(info->uclass));
 		log_debug("Hunting with: %s\n", name);
 		if (info->hunt) {
+			/*
+			 * This is where bus enumeration actually happens
+			 * (pci_init(), nvme_scan_namespace(), usb_init(), ...).
+			 * Each hunter runs at most once per boot, so the
+			 * timestamps appear in hunter order - match them up
+			 * against the "Hunting with: <uclass>" lines that
+			 * 'bootflow scan -l' prints.
+			 */
+			cb_timestamp(TS_U_BOOT_BOOTDEV_HUNT_START);
 			ret = info->hunt(info, show);
+			cb_timestamp(TS_U_BOOT_BOOTDEV_HUNT_END);
 			log_debug("  - hunt result %d\n", ret);
 			if (ret && ret != -ENOENT)
 				return ret;
