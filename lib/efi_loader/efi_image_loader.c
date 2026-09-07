@@ -880,6 +880,27 @@ static u32 section_size(IMAGE_SECTION_HEADER *sec)
 		return sec->SizeOfRawData;
 }
 
+/* Images with stripped relocations must be loaded at their ImageBase. */
+static void *efi_load_image_base(uint64_t image_base, bool relocations_stripped,
+				 unsigned long virt_size, int mem_type,
+				 uint64_t align)
+{
+	efi_status_t ret;
+
+	if (!relocations_stripped)
+		return efi_alloc_aligned_pages(virt_size, mem_type, align);
+
+	if (!image_base)
+		return NULL;
+
+	ret = efi_allocate_pages(EFI_ALLOCATE_ADDRESS, mem_type,
+				 efi_size_in_pages(virt_size), &image_base);
+	if (ret != EFI_SUCCESS)
+		return NULL;
+
+	return (void *)(uintptr_t)image_base;
+}
+
 /**
  * efi_load_pe() - relocate EFI binary
  *
@@ -906,6 +927,7 @@ efi_status_t efi_load_pe(struct efi_loaded_image_obj *handle,
 	unsigned long rel_size;
 	int rel_idx = IMAGE_DIRECTORY_ENTRY_BASERELOC;
 	uint64_t image_base;
+	bool relocations_stripped;
 	unsigned long virt_size = 0;
 	int supported = 0;
 	efi_status_t ret;
@@ -915,6 +937,8 @@ efi_status_t efi_load_pe(struct efi_loaded_image_obj *handle,
 		log_err("Not a PE-COFF file\n");
 		return EFI_LOAD_ERROR;
 	}
+
+	relocations_stripped = nt->FileHeader.Characteristics & IMAGE_FILE_RELOCS_STRIPPED;
 
 	for (i = 0; machines[i]; i++)
 		if (machines[i] == nt->FileHeader.Machine) {
@@ -961,32 +985,32 @@ efi_status_t efi_load_pe(struct efi_loaded_image_obj *handle,
 		image_base = opt->ImageBase;
 		efi_set_code_and_data_type(loaded_image_info, opt->Subsystem);
 		handle->image_type = opt->Subsystem;
-		efi_reloc = efi_alloc_aligned_pages(virt_size,
-						    loaded_image_info->image_code_type,
-						    opt->SectionAlignment);
+		rel_size = opt->DataDirectory[rel_idx].Size;
+		efi_reloc = efi_load_image_base(image_base, relocations_stripped, virt_size,
+						loaded_image_info->image_code_type,
+						opt->SectionAlignment);
 		if (!efi_reloc) {
 			log_err("Out of memory\n");
 			ret = EFI_OUT_OF_RESOURCES;
 			goto err;
 		}
 		handle->entry = efi_reloc + opt->AddressOfEntryPoint;
-		rel_size = opt->DataDirectory[rel_idx].Size;
 		rel = efi_reloc + opt->DataDirectory[rel_idx].VirtualAddress;
 	} else if (nt->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
 		IMAGE_OPTIONAL_HEADER32 *opt = &nt->OptionalHeader;
 		image_base = opt->ImageBase;
 		efi_set_code_and_data_type(loaded_image_info, opt->Subsystem);
 		handle->image_type = opt->Subsystem;
-		efi_reloc = efi_alloc_aligned_pages(virt_size,
-						    loaded_image_info->image_code_type,
-						    opt->SectionAlignment);
+		rel_size = opt->DataDirectory[rel_idx].Size;
+		efi_reloc = efi_load_image_base(image_base, relocations_stripped, virt_size,
+						loaded_image_info->image_code_type,
+						opt->SectionAlignment);
 		if (!efi_reloc) {
 			log_err("Out of memory\n");
 			ret = EFI_OUT_OF_RESOURCES;
 			goto err;
 		}
 		handle->entry = efi_reloc + opt->AddressOfEntryPoint;
-		rel_size = opt->DataDirectory[rel_idx].Size;
 		rel = efi_reloc + opt->DataDirectory[rel_idx].VirtualAddress;
 	} else {
 		log_err("Invalid optional header magic %x\n",
