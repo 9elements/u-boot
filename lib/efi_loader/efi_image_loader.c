@@ -880,6 +880,31 @@ static u32 section_size(IMAGE_SECTION_HEADER *sec)
 		return sec->SizeOfRawData;
 }
 
+/*
+ * Try the preferred ImageBase for images without a relocation directory.
+ * Some payloads depend on that address. Preserve the existing aligned
+ * allocation fallback when the preferred address cannot be allocated.
+ */
+static void *efi_load_image_base(uint64_t image_base, unsigned long rel_size,
+				 unsigned long virt_size, int mem_type,
+				 uint64_t align)
+{
+	void *efi_reloc = NULL;
+
+	if (rel_size == 0 && image_base) {
+		uint64_t addr = image_base;
+
+		if (efi_allocate_pages(EFI_ALLOCATE_ADDRESS, mem_type,
+				       efi_size_in_pages(virt_size),
+				       &addr) == EFI_SUCCESS)
+			efi_reloc = (void *)(uintptr_t)addr;
+	}
+	if (!efi_reloc)
+		efi_reloc = efi_alloc_aligned_pages(virt_size, mem_type, align);
+
+	return efi_reloc;
+}
+
 /**
  * efi_load_pe() - relocate EFI binary
  *
@@ -961,32 +986,32 @@ efi_status_t efi_load_pe(struct efi_loaded_image_obj *handle,
 		image_base = opt->ImageBase;
 		efi_set_code_and_data_type(loaded_image_info, opt->Subsystem);
 		handle->image_type = opt->Subsystem;
-		efi_reloc = efi_alloc_aligned_pages(virt_size,
-						    loaded_image_info->image_code_type,
-						    opt->SectionAlignment);
+		rel_size = opt->DataDirectory[rel_idx].Size;
+		efi_reloc = efi_load_image_base(image_base, rel_size, virt_size,
+						loaded_image_info->image_code_type,
+						opt->SectionAlignment);
 		if (!efi_reloc) {
 			log_err("Out of memory\n");
 			ret = EFI_OUT_OF_RESOURCES;
 			goto err;
 		}
 		handle->entry = efi_reloc + opt->AddressOfEntryPoint;
-		rel_size = opt->DataDirectory[rel_idx].Size;
 		rel = efi_reloc + opt->DataDirectory[rel_idx].VirtualAddress;
 	} else if (nt->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
 		IMAGE_OPTIONAL_HEADER32 *opt = &nt->OptionalHeader;
 		image_base = opt->ImageBase;
 		efi_set_code_and_data_type(loaded_image_info, opt->Subsystem);
 		handle->image_type = opt->Subsystem;
-		efi_reloc = efi_alloc_aligned_pages(virt_size,
-						    loaded_image_info->image_code_type,
-						    opt->SectionAlignment);
+		rel_size = opt->DataDirectory[rel_idx].Size;
+		efi_reloc = efi_load_image_base(image_base, rel_size, virt_size,
+						loaded_image_info->image_code_type,
+						opt->SectionAlignment);
 		if (!efi_reloc) {
 			log_err("Out of memory\n");
 			ret = EFI_OUT_OF_RESOURCES;
 			goto err;
 		}
 		handle->entry = efi_reloc + opt->AddressOfEntryPoint;
-		rel_size = opt->DataDirectory[rel_idx].Size;
 		rel = efi_reloc + opt->DataDirectory[rel_idx].VirtualAddress;
 	} else {
 		log_err("Invalid optional header magic %x\n",
