@@ -93,6 +93,13 @@ enum timestamp_id {
 	/* U-Boot entry IDs start at 1000 */
 	TS_U_BOOT_INITTED = 1000, /* This is where U-Boot starts */
 
+	/* Shared with coreboot timestamp_serialized.h. */
+	TS_U_BOOT_MAIN_LOOP = 1150,
+	TS_U_BOOT_USB_START = 1151,
+	TS_U_BOOT_USB_END = 1152,
+	TS_U_BOOT_EFI_IMAGE_START = 1153,
+	TS_U_BOOT_EXIT_BOOT_SERVICES = 1154,
+
 	TS_RO_PARAMS_INIT = 1001,
 	TS_RO_VB_INIT = 1002,
 	TS_RO_VB_SELECT_FIRMWARE = 1003,

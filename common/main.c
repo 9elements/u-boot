@@ -7,6 +7,9 @@
 /* #define	DEBUG	*/
 
 #include <autoboot.h>
+#ifdef CONFIG_VENDOR_COREBOOT
+#include <asm/arch/timestamp.h>
+#endif
 #include <button.h>
 #include <bootstage.h>
 #include <bootstd.h>
@@ -45,6 +48,10 @@ void main_loop(void)
 	const char *s;
 
 	bootstage_mark_name(BOOTSTAGE_ID_MAIN_LOOP, "main_loop");
+#ifdef CONFIG_VENDOR_COREBOOT
+	/* Initialization is complete; autoboot follows. */
+	timestamp_add_now(TS_U_BOOT_MAIN_LOOP);
+#endif
 
 	if (IS_ENABLED(CONFIG_VERSION_VARIABLE))
 		env_set("ver", version_string);  /* set version variable */

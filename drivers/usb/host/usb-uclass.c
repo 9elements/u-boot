@@ -8,6 +8,9 @@
 
 #define LOG_CATEGORY UCLASS_USB
 
+#ifdef CONFIG_VENDOR_COREBOOT
+#include <asm/arch/timestamp.h>
+#endif
 #include <bootdev.h>
 #include <uthread.h>
 #include <dm.h>
@@ -398,6 +401,9 @@ int usb_init(void)
 	}
 
 	asynch_allowed = 1;
+#ifdef CONFIG_VENDOR_COREBOOT
+	timestamp_add_now(TS_U_BOOT_USB_START);
+#endif
 
 	ret = uclass_get(UCLASS_USB, &uc);
 	if (ret)
@@ -466,6 +472,9 @@ int usb_init(void)
 	if (controllers_initialized == 0)
 		printf("No USB controllers found\n");
 
+#ifdef CONFIG_VENDOR_COREBOOT
+	timestamp_add_now(TS_U_BOOT_USB_END);
+#endif
 	debug("USB initialized in %ld ms\n",
 	      (timer_get_us() - t0) / 1000);
 

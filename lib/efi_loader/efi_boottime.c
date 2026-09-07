@@ -14,6 +14,9 @@
 #include <efi_device_path.h>
 #include <efi_loader.h>
 #include <irq_func.h>
+#ifdef CONFIG_VENDOR_COREBOOT
+#include <asm/arch/timestamp.h>
+#endif
 #include <log.h>
 #include <malloc.h>
 #include <net-common.h>
@@ -2269,6 +2272,10 @@ static efi_status_t EFIAPI efi_exit_boot_services(efi_handle_t image_handle,
 	/* Give the payload some time to boot */
 	efi_set_watchdog(0);
 	schedule();
+#ifdef CONFIG_VENDOR_COREBOOT
+	/* Successful first ExitBootServices, after device quiescence. */
+	timestamp_add_now(TS_U_BOOT_EXIT_BOOT_SERVICES);
+#endif
 out:
 	if (IS_ENABLED(CONFIG_EFI_TCG2_PROTOCOL)) {
 		if (ret != EFI_SUCCESS)
@@ -3278,6 +3285,10 @@ efi_status_t EFIAPI efi_start_image(efi_handle_t image_handle,
 	image_obj->header.type = EFI_OBJECT_TYPE_STARTED_IMAGE;
 	EFI_PRINT("Starting image loaded at 0x%p, entry point 0x%p\n",
 		  info->image_base, image_obj->entry);
+#ifdef CONFIG_VENDOR_COREBOOT
+	/* Every EFI image entry, including GRUB and the Linux EFI stub. */
+	timestamp_add_now(TS_U_BOOT_EFI_IMAGE_START);
+#endif
 	ret = EFI_CALL(image_obj->entry(image_handle, &systab));
 
 	/*
