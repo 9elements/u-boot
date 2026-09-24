@@ -10,6 +10,36 @@
 #include <env.h>
 #include <cbfs.h>
 #include <vsprintf.h>
+#include <linux/errno.h>
+#include <linux/sizes.h>
+#ifdef CONFIG_SYS_COREBOOT
+#include <asm/cb_sysinfo.h>
+#endif
+
+/*
+ * With no explicit end-of-ROM, prefer the CBFS coreboot actually booted from,
+ * as reported in its boot-media params. This covers images without a legacy
+ * master header pointer at the top of the ROM (e.g. AMD, FMAP A/B layouts).
+ * The boot media is memory-mapped just below 4GiB.
+ */
+static int cbfs_init_from_coreboot(void)
+{
+#ifdef CONFIG_SYS_COREBOOT
+	const struct sysinfo_t *info = &lib_sysinfo;
+	u64 base;
+
+	if (!info->cbfs_size || !info->boot_media_size ||
+	    info->cbfs_offset + info->cbfs_size > info->boot_media_size ||
+	    info->boot_media_size > SZ_4G)
+		return -ENOENT;
+
+	base = SZ_4G - info->boot_media_size + info->cbfs_offset;
+
+	return file_cbfs_init_region((ulong)base, info->cbfs_size);
+#else
+	return -ENOENT;
+#endif
+}
 
 static int do_cbfs_init(struct cmd_tbl *cmdtp, int flag, int argc,
 			char *const argv[])
@@ -28,6 +58,8 @@ static int do_cbfs_init(struct cmd_tbl *cmdtp, int flag, int argc,
 			return 1;
 		}
 	}
+	if (argc == 1 && !cbfs_init_from_coreboot())
+		return 0;
 	if (file_cbfs_init(end_of_rom)) {
 		printf("%s.\n", file_cbfs_error());
 		return 1;

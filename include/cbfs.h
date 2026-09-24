@@ -199,6 +199,18 @@ enum cbfs_result cbfs_get_result(void);
 int file_cbfs_init(ulong end_of_rom);
 
 /**
+ * file_cbfs_init_region() - Initialize the CBFS driver from a known region
+ *
+ * Use this when the CBFS has no legacy master header, e.g. modern coreboot
+ * images whose CBFS location is reported in the coreboot tables.
+ *
+ * @base: Address of the first byte of the CBFS region in memory
+ * @size: Size of the CBFS region in bytes
+ * Return: 0 if OK, -ve on error
+ */
+int file_cbfs_init_region(ulong base, ulong size);
+
+/**
  * file_cbfs_get_header() - Get the header structure for the current CBFS.
  *
  * Return: A pointer to the constant structure, or NULL if there is none.
