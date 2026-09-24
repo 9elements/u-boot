@@ -315,6 +315,29 @@ int file_cbfs_init(ulong end_of_rom)
 	return cbfs_init(&cbfs_s, end_of_rom);
 }
 
+int file_cbfs_init_region(ulong base, ulong size)
+{
+	struct cbfs_priv *priv = &cbfs_s;
+	int ret;
+
+	/*
+	 * Modern coreboot images carry no legacy master header, so describe
+	 * the CBFS region directly (e.g. from coreboot's boot-media params).
+	 */
+	priv->initialized = false;
+	memset(&priv->header, '\0', sizeof(priv->header));
+	priv->header.rom_size = size;
+	priv->header.align = CBFS_ALIGN_SIZE;
+	priv->start = (void *)base;
+
+	ret = file_cbfs_fill_cache(priv, size, CBFS_ALIGN_SIZE);
+	if (ret)
+		return ret;
+	priv->initialized = true;
+
+	return 0;
+}
+
 int cbfs_init_mem(ulong base, ulong size, bool require_hdr,
 		  struct cbfs_priv **privp)
 {
