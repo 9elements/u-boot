@@ -6,6 +6,7 @@
 /*
  * CBFS commands
  */
+#include <bootstage.h>
 #include <command.h>
 #include <env.h>
 #include <cbfs.h>
@@ -107,7 +108,9 @@ static int do_cbfs_fsload(struct cmd_tbl *cmdtp, int flag, int argc,
 
 	printf("reading %s\n", file_cbfs_name(file));
 
+	bootstage_mark_name(BOOTSTAGE_KERNELREAD_START, "cbfs_read_start");
 	size = file_cbfs_read(file, (void *)offset, count);
+	bootstage_mark_name(BOOTSTAGE_KERNELREAD_STOP, "cbfs_read_done");
 
 	printf("\n%ld bytes read\n", size);
 
