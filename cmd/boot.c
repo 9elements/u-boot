@@ -7,6 +7,7 @@
 /*
  * Misc boot support
  */
+#include <bootstage.h>
 #include <command.h>
 #include <net.h>
 #include <vsprintf.h>
@@ -38,6 +39,7 @@ static int do_go(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	 * pass address parameter as argv[0] (aka command name),
 	 * and all remaining args
 	 */
+	bootstage_mark_name(BOOTSTAGE_ID_BOOTM_HANDOFF, "start_go");
 	rc = do_go_exec ((void *)addr, argc - 1, argv + 1);
 	if (rc != 0) rcode = 1;
 

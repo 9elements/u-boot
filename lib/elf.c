@@ -3,6 +3,7 @@
    Copyright (c) 2001 William L. Pitts
 */
 
+#include <bootstage.h>
 #include <command.h>
 #include <cpu_func.h>
 #include <elf.h>
@@ -65,6 +66,8 @@ unsigned long bootelf(unsigned long addr, Bootelf_flags flags,
 		argc = 1;
 		argv = args;
 	}
+
+	bootstage_mark_name(BOOTSTAGE_ID_BOOTM_HANDOFF, "start_elf");
 
 	return bootelf_exec((void *)entry_addr, argc, argv);
 }

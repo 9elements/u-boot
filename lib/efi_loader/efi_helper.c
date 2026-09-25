@@ -7,6 +7,7 @@
 
 #include <blkmap.h>
 #include <bootm.h>
+#include <bootstage.h>
 #include <efi_device_path.h>
 #include <env.h>
 #include <image.h>
@@ -687,6 +688,9 @@ efi_status_t do_bootefi_exec(efi_handle_t handle, void *load_options)
 		log_err("failed to set watchdog timer\n");
 		goto out;
 	}
+
+	/* Last point at which U-Boot hands control to the payload */
+	bootstage_mark_name(BOOTSTAGE_ID_BOOTM_HANDOFF, "start_efi");
 
 	/* Call our payload! */
 	ret = EFI_CALL(efi_start_image(handle, &exit_data_size, &exit_data));
