@@ -109,6 +109,14 @@ enum timestamp_id {
 	TS_START_KERNEL = 1101,
 	TS_KERNEL_DECOMPRESSION = 1102,
 	TS_U_BOOT_START_KERNEL = 1100, /* Right before jumping to kernel */
+
+	/*
+	 * Image reads (fs, CBFS, TFTP), from BOOTSTAGE_KERNELREAD_START/STOP.
+	 * Kept clear of the 1000-1200 range reserved for ChromeOS depthcharge.
+	 * Recorded once per read, so consumers pair entries in order.
+	 */
+	TS_U_BOOT_READ_START = 10030,
+	TS_U_BOOT_READ_END = 10031,
 };
 
 struct memory_area;

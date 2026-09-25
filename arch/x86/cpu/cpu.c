@@ -181,7 +181,8 @@ int print_cpuinfo(void)
 }
 #endif
 
-#if CONFIG_IS_ENABLED(SHOW_BOOT_PROGRESS)
+/* On coreboot the progress hook feeds cbmem timestamps instead */
+#if CONFIG_IS_ENABLED(SHOW_BOOT_PROGRESS) && !IS_ENABLED(CONFIG_SYS_COREBOOT)
 void show_boot_progress(int val)
 {
 	outb(val, POST_PORT);
