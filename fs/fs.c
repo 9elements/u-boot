@@ -5,6 +5,7 @@
 
 #define LOG_CATEGORY LOGC_CORE
 
+#include <bootstage.h>
 #include <command.h>
 #include <config.h>
 #include <display_options.h>
@@ -666,9 +667,11 @@ static int _fs_read(const char *filename, ulong addr, loff_t offset, loff_t len,
 	 * We don't actually know how many bytes are being read, since len==0
 	 * means read the whole file.
 	 */
+	bootstage_mark_name(BOOTSTAGE_KERNELREAD_START, "fs_read_start");
 	buf = map_sysmem(addr, len);
 	ret = info->read(filename, buf, offset, len, actread);
 	unmap_sysmem(buf);
+	bootstage_mark_name(BOOTSTAGE_KERNELREAD_STOP, "fs_read_done");
 
 	/* If we requested a specific number of bytes, check we got it */
 	if (ret == 0 && len && *actread != len)
