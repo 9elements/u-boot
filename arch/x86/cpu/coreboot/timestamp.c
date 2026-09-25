@@ -36,6 +36,32 @@ void timestamp_add_now(enum timestamp_id id)
 	timestamp_add(id, rdtsc());
 }
 
+#if CONFIG_IS_ENABLED(SHOW_BOOT_PROGRESS)
+/*
+ * Record the boot stages that matter for boot-time analysis in coreboot's
+ * cbmem timestamp table, so the OS sees them on coreboot's timeline
+ * ("cbmem -t"). Commands only need a bootstage mark; the mapping to cbmem
+ * IDs lives here. Every occurrence is recorded (bootstage itself keeps only
+ * the first), so a consumer should use the last handoff entry.
+ */
+void show_boot_progress(int val)
+{
+	switch (val) {
+	case BOOTSTAGE_ID_BOOTM_HANDOFF:
+		timestamp_add_now(TS_U_BOOT_START_KERNEL);
+		break;
+	case BOOTSTAGE_KERNELREAD_START:
+		timestamp_add_now(TS_U_BOOT_READ_START);
+		break;
+	case BOOTSTAGE_KERNELREAD_STOP:
+		timestamp_add_now(TS_U_BOOT_READ_END);
+		break;
+	default:
+		break;
+	}
+}
+#endif
+
 int timestamp_add_to_bootstage(void)
 {
 	const struct sysinfo_t *info = cb_get_sysinfo();

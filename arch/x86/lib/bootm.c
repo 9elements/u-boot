@@ -139,11 +139,8 @@ error:
 
 int boot_linux_kernel(ulong setup_base, ulong entry, bool image_64bit)
 {
+	/* Records the handoff (bootm_final()), in cbmem too on coreboot */
 	bootm_announce_and_cleanup();
-
-#ifdef CONFIG_SYS_COREBOOT
-	timestamp_add_now(TS_U_BOOT_START_KERNEL);
-#endif
 
 	/*
 	 * Exit EFI boot services just before jumping, after all console

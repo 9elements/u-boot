@@ -22,6 +22,7 @@ config SYS_COREBOOT
 	imply PCH_GBE
 	imply RTL8169
 	imply CMD_CBFS
+	imply SHOW_BOOT_PROGRESS
 	imply FS_CBFS
 	imply CBMEM_CONSOLE
 	imply X86_TSC_READ_BASE
