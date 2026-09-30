@@ -28,6 +28,12 @@
 #include <div64.h>
 #include <linux/math64.h>
 #include <linux/sizes.h>
+#ifdef CONFIG_VENDOR_COREBOOT
+#include <asm/arch/timestamp.h>
+#define cb_timestamp(id)	timestamp_add_now(id)
+#else
+#define cb_timestamp(id)	do { } while (0)
+#endif
 #include <efi_loader.h>
 #include <squashfs.h>
 #include <erofs.h>
@@ -842,7 +848,9 @@ int do_load(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[],
 		pos = 0;
 
 	time = get_timer(0);
+	cb_timestamp(TS_U_BOOT_LOAD_START);
 	ret = _fs_read(filename, addr, pos, bytes, 1, &len_read);
+	cb_timestamp(TS_U_BOOT_LOAD_END);
 	time = get_timer(time);
 	if (ret < 0) {
 		log_err("Failed to load '%s'\n", filename);

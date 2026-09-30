@@ -17,6 +17,13 @@
 #include <linux/compat.h>
 #include "nvme.h"
 
+#ifdef CONFIG_VENDOR_COREBOOT
+#include <asm/arch/timestamp.h>
+#define cb_timestamp(id)	timestamp_add_now(id)
+#else
+#define cb_timestamp(id)	do { } while (0)
+#endif
+
 #define NVME_Q_DEPTH		2
 #define NVME_AQ_DEPTH		2
 #define NVME_SQ_SIZE(depth)	(depth * sizeof(struct nvme_command))
@@ -391,6 +398,7 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 	result = nvme_disable_ctrl(dev);
 	if (result < 0)
 		return result;
+	cb_timestamp(TS_U_BOOT_NVME_DISABLED);
 
 	nvmeq = dev->queues[NVME_ADMIN_Q];
 	if (!nvmeq) {
@@ -416,6 +424,7 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 	result = nvme_enable_ctrl(dev);
 	if (result)
 		goto free_nvmeq;
+	cb_timestamp(TS_U_BOOT_NVME_READY);
 
 	nvmeq->cq_vector = 0;
 
@@ -702,6 +711,7 @@ int nvme_scan_namespace(void)
 	struct udevice *dev;
 	int ret;
 
+	cb_timestamp(TS_U_BOOT_NVME_SCAN_START);
 	ret = uclass_get(UCLASS_NVME, &uc);
 	if (ret)
 		return ret;
@@ -850,6 +860,7 @@ int nvme_init(struct udevice *udev)
 	struct nvme_id_ns *id;
 	int ret;
 
+	cb_timestamp(TS_U_BOOT_NVME_INIT_START);
 	ndev->udev = udev;
 	INIT_LIST_HEAD(&ndev->namespaces);
 	if (readl(&ndev->bar->csts) == -1) {
@@ -940,6 +951,7 @@ int nvme_init(struct udevice *udev)
 	}
 
 	free(id);
+	cb_timestamp(TS_U_BOOT_NVME_INIT_END);
 	return 0;
 
 free_id:
