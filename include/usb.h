@@ -232,6 +232,8 @@ int board_usb_cleanup(int index, enum usb_init_type init);
 int usb_stor_scan(int mode);
 int usb_stor_info(void);
 
+int usb_storage_ifnum(struct usb_device *dev);
+
 #endif
 
 #ifdef CONFIG_USB_HOST_ETHER
