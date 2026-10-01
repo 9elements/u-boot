@@ -796,6 +796,12 @@ int usb_scan_device(struct udevice *parent, int port,
 	debug("read_descriptor for '%s': ret=%d\n", parent->name, ret);
 	if (ret)
 		return ret;
+	if (CONFIG_IS_ENABLED(USB_STORAGE)) {
+		int ifnum = usb_storage_ifnum(udev);
+
+		if (ifnum > 0)
+			iface = &udev->config.if_desc[ifnum].desc;
+	}
 	ret = usb_find_child(parent, &udev->descriptor, iface, &dev);
 	debug("** usb_find_child returns %d\n", ret);
 	if (ret) {
