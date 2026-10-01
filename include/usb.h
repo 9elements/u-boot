@@ -234,6 +234,8 @@ int usb_stor_info(void);
 
 #endif
 
+int usb_storage_ifnum(struct usb_device *dev);
+
 #ifdef CONFIG_USB_HOST_ETHER
 
 #define USB_MAX_ETH_DEV 5

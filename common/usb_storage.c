@@ -186,9 +186,25 @@ static unsigned int usb_get_max_lun(struct us_data *us)
 	return (len > 0) ? *result : 0;
 }
 
+int usb_storage_ifnum(struct usb_device *dev)
+{
+	int i;
+
+	for (i = 0; i < dev->config.no_of_if; i++)
+		if (dev->config.if_desc[i].desc.bInterfaceClass ==
+		    USB_CLASS_MASS_STORAGE)
+			return i;
+
+	return -1;
+}
+
 static int usb_stor_probe_device(struct usb_device *udev)
 {
 	int lun, max_lun;
+	int ifnum = usb_storage_ifnum(udev);
+
+	if (ifnum < 0)
+		ifnum = 0;
 
 #if CONFIG_IS_ENABLED(BLK)
 	struct us_data *data;
@@ -208,7 +224,7 @@ static int usb_stor_probe_device(struct usb_device *udev)
 	 * device.
 	 */
 	data = dev_get_plat(udev->dev);
-	if (!usb_storage_probe(udev, 0, data))
+	if (!usb_storage_probe(udev, ifnum, data))
 		return 0;
 	max_lun = usb_get_max_lun(data);
 	for (lun = 0; lun <= max_lun; lun++) {
@@ -263,7 +279,7 @@ static int usb_stor_probe_device(struct usb_device *udev)
 		return -ENOSPC;
 	}
 
-	if (!usb_storage_probe(udev, 0, &usb_stor[usb_max_devs]))
+	if (!usb_storage_probe(udev, ifnum, &usb_stor[usb_max_devs]))
 		return 0;
 
 	/*
