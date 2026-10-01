@@ -584,6 +584,15 @@ static int xhci_init_ep_contexts_if(struct usb_device *udev,
 	return 0;
 }
 
+static bool xhci_if_active(struct usb_device *udev, unsigned int ifnum)
+{
+	if (ifnum < USB_MAX_ACTIVE_INTERFACES)
+		return true;
+
+	return udev->config.if_desc[ifnum].desc.bInterfaceClass ==
+	       USB_CLASS_MASS_STORAGE;
+}
+
 /**
  * Configure the endpoint, programming the device contexts.
  *
@@ -606,8 +615,7 @@ static int xhci_set_configuration(struct usb_device *udev)
 	struct xhci_virt_device *virt_dev = ctrl->devs[slot_id];
 	struct usb_interface *ifdesc;
 	unsigned int ifnum;
-	unsigned int max_ifnum = min((unsigned int)USB_MAX_ACTIVE_INTERFACES,
-				     (unsigned int)udev->config.no_of_if);
+	unsigned int max_ifnum = udev->config.no_of_if;
 
 	out_ctx = virt_dev->out_ctx;
 	in_ctx = virt_dev->in_ctx;
@@ -618,6 +626,8 @@ static int xhci_set_configuration(struct usb_device *udev)
 	ctrl_ctx->drop_flags = 0;
 
 	for (ifnum = 0; ifnum < max_ifnum; ifnum++) {
+		if (!xhci_if_active(udev, ifnum))
+			continue;
 		ifdesc = &udev->config.if_desc[ifnum];
 		num_of_ep = ifdesc->no_of_ep;
 		/* EP_FLAG gives values 1 & 4 for EP1OUT and EP2IN */
@@ -641,6 +651,8 @@ static int xhci_set_configuration(struct usb_device *udev)
 
 	/* filling up ep contexts */
 	for (ifnum = 0; ifnum < max_ifnum; ifnum++) {
+		if (!xhci_if_active(udev, ifnum))
+			continue;
 		ifdesc = &udev->config.if_desc[ifnum];
 		err = xhci_init_ep_contexts_if(udev, ctrl, virt_dev, ifdesc);
 		if (err < 0)
