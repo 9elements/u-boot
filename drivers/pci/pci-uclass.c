@@ -688,20 +688,33 @@ int dm_pci_hose_probe_bus(struct udevice *bus)
 		return log_msg_ret("probe", -EINVAL);
 	}
 
-	if (IS_ENABLED(CONFIG_PCI_ENHANCED_ALLOCATION))
-		ea_pos = dm_pci_find_capability(bus, PCI_CAP_ID_EA);
-	else
-		ea_pos = 0;
+	/*
+	 * When a prior stage already did low-level init (ll_boot_init() ==
+	 * false, e.g. a coreboot/FSP payload), bus numbers and resources are
+	 * already correctly programmed in hardware -- don't recompute and
+	 * rewrite the secondary/subordinate bus registers, just recurse into
+	 * device_probe() below to discover what's there. pci_uclass_pre_probe()
+	 * reads this bridge's already-programmed PCI_SECONDARY_BUS back as its
+	 * dev_seq() in that case.
+	 */
+	if (ll_boot_init()) {
+		if (IS_ENABLED(CONFIG_PCI_ENHANCED_ALLOCATION))
+			ea_pos = dm_pci_find_capability(bus, PCI_CAP_ID_EA);
+		else
+			ea_pos = 0;
 
-	if (ea_pos) {
-		dm_pci_read_config8(bus, ea_pos + sizeof(u32) + sizeof(u8),
-				    &reg);
-		sub_bus = reg;
+		if (ea_pos) {
+			dm_pci_read_config8(bus, ea_pos + sizeof(u32) + sizeof(u8),
+					    &reg);
+			sub_bus = reg;
+		} else {
+			sub_bus = pci_get_bus_max() + 1;
+		}
+		debug("%s: bus = %d/%s\n", __func__, sub_bus, bus->name);
+		dm_pciauto_prescan_setup_bridge(bus, sub_bus);
 	} else {
-		sub_bus = pci_get_bus_max() + 1;
+		ea_pos = 0;
 	}
-	debug("%s: bus = %d/%s\n", __func__, sub_bus, bus->name);
-	dm_pciauto_prescan_setup_bridge(bus, sub_bus);
 
 	ret = device_probe(bus);
 	if (ret) {
@@ -709,6 +722,9 @@ int dm_pci_hose_probe_bus(struct udevice *bus)
 		      ret);
 		return log_msg_ret("probe", ret);
 	}
+
+	if (!ll_boot_init())
+		return dev_seq(bus);
 
 	if (!ea_pos)
 		sub_bus = pci_get_bus_max();
@@ -1261,7 +1277,15 @@ static int pci_uclass_post_probe(struct udevice *bus)
 	if (ret)
 		return log_msg_ret("bind", ret);
 
-	if (CONFIG_IS_ENABLED(PCI_PNP) && ll_boot_init() &&
+	/*
+	 * Always walk the bus so every device gets discovered, even on
+	 * boards where ll_boot_init() is false (e.g. a coreboot/FSP payload
+	 * that already did low-level init): dm_pciauto_config_device() and
+	 * dm_pci_hose_probe_bus() check ll_boot_init() themselves and skip
+	 * writing bus numbers/BARs in that case, recursing for discovery
+	 * only and trusting the earlier stage's configuration.
+	 */
+	if (CONFIG_IS_ENABLED(PCI_PNP) &&
 	    (!hose->skip_auto_config_until_reloc ||
 	     (gd->flags & GD_FLG_RELOC))) {
 		ret = pci_auto_config_devices(bus);
