@@ -130,7 +130,7 @@ static int env_fat_load(void)
 		mmc_initialize(NULL);
 #endif
 #ifndef CONFIG_XPL_BUILD
-#if defined(CONFIG_AHCI) || defined(CONFIG_SCSI)
+#if defined(CONFIG_SCSI)
 	if (!strcmp(ifname, "scsi"))
 		scsi_scan(true);
 #endif
