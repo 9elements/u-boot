@@ -85,8 +85,9 @@ efi_status_t efi_var_from_storage(void)
 	r = uclass_get_device(UCLASS_SPI_FLASH,
 			      CONFIG_EFI_VARIABLE_SF_DEVICE_INDEX, &sfdev);
 	if (r) {
-		log_err("Failed to get SPI Flash device: %d\n", r);
-		ret = EFI_DEVICE_ERROR;
+		/* Like a missing file for the file store: start without variables */
+		log_warning("No SPI Flash device for UEFI variables: %d\n", r);
+		ret = EFI_SUCCESS;
 		goto error;
 	}
 
