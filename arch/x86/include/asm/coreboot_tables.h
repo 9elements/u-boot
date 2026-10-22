@@ -485,6 +485,22 @@ struct cb_tsc_info {
 	u32 freq_khz;
 };
 
+#define CB_TAG_SMMSTOREV2		0x0039
+struct cb_smmstorev2 {
+	u32 tag;
+	u32 size;
+	u32 num_blocks;
+	u32 block_size;
+	/* 32-bit address of the read-only mapping, 0 if above 4GiB */
+	u32 mmap_addr_deprecated;
+	u32 com_buffer;
+	u32 com_buffer_size;
+	u8 apm_cmd;
+	u8 unused[3];
+	/* only present if size covers it */
+	u64 mmap_addr;
+};
+
 #define CB_TAG_SERIALNO			0x002a
 #define CB_MAX_SERIALNO_LENGTH		32
 

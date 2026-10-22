@@ -453,6 +453,14 @@ static void show_table(struct sysinfo_t *info, bool verbose)
 
 	print_ptr("Chrome OS VPD", info->chromeos_vpd);
 	print_ptr("RSDP", info->rsdp);
+	if (info->smmstore.num_blocks) {
+		print_dec("SMMSTORE blk", info->smmstore.num_blocks);
+		print_hex("  block size", info->smmstore.block_size);
+		print_addr("  com buffer", info->smmstore.com_buffer);
+		print_hex("  com size", info->smmstore.com_buffer_size);
+		print_hex("  APM cmd", info->smmstore.apm_cmd);
+		print_addr64("  mmap addr", info->smmstore.mmap_addr);
+	}
 	printf("%-12s: ", "Unimpl.");
 	if (info->unimpl_count) {
 		for (i = 0; i < info->unimpl_count; i++)

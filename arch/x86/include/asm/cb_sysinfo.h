@@ -137,6 +137,13 @@
  * @chromeos_vpd: Chromium OS Vital Product Data region, typically NULL, meaning
  *	not used
  * @rsdp: Pointer to ACPI RSDP table
+ * @smmstore: SMM-mediated flash store (SMMSTORE v2), all zero if not present:
+ *	@num_blocks: Number of blocks in the store
+ *	@block_size: Size of each block in bytes, e.g. 64KB
+ *	@com_buffer: Physical address of the buffer used to transfer data
+ *	@com_buffer_size: Size of the communication buffer in bytes
+ *	@apm_cmd: Value to write to the APM command port to call the store
+ *	@mmap_addr: Address of a read-only mapping of the store, 0 if none
  * @unimpl_count: Number of entries in unimpl_map[]
  * @unimpl: List of unimplemented IDs (bottom 8 bits only)
  * @table_size: Number of bytes taken up by the sysinfo table
@@ -220,6 +227,14 @@ struct sysinfo_t {
 	u32 mtc_size;
 	void	*chromeos_vpd;
 	void *rsdp;
+	struct {
+		u32 num_blocks;
+		u32 block_size;
+		u32 com_buffer;
+		u32 com_buffer_size;
+		u8 apm_cmd;
+		u64 mmap_addr;
+	} smmstore;
 	u32 unimpl_count;
 	u8 unimpl[SYSINFO_MAX_UNIMPL];
 	uint table_size;

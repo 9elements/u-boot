@@ -250,6 +250,21 @@ static void cb_parse_tsc_info(void *ptr, struct sysinfo_t *info)
 	info->cpu_khz = tsc_info->freq_khz;
 }
 
+static void cb_parse_smmstorev2(void *ptr, struct sysinfo_t *info)
+{
+	const struct cb_smmstorev2 *store = ptr;
+
+	info->smmstore.num_blocks = store->num_blocks;
+	info->smmstore.block_size = store->block_size;
+	info->smmstore.com_buffer = store->com_buffer;
+	info->smmstore.com_buffer_size = store->com_buffer_size;
+	info->smmstore.apm_cmd = store->apm_cmd;
+	if (store->size >= sizeof(*store))
+		info->smmstore.mmap_addr = store->mmap_addr;
+	else
+		info->smmstore.mmap_addr = store->mmap_addr_deprecated;
+}
+
 static void cb_parse_x86_rom_var_mtrr(void *ptr, struct sysinfo_t *info)
 {
 	struct cb_x86_rom_mtrr *rom_mtrr = ptr;
@@ -428,6 +443,9 @@ static int cb_parse_header(void *addr, int len, struct sysinfo_t *info)
 			break;
 		case CB_TAG_VPD:
 			cb_parse_vpd(ptr, info);
+			break;
+		case CB_TAG_SMMSTOREV2:
+			cb_parse_smmstorev2(ptr, info);
 			break;
 		case CB_TAG_X86_ROM_MTRR:
 			cb_parse_x86_rom_var_mtrr(rec, info);
