@@ -137,6 +137,7 @@
  * @chromeos_vpd: Chromium OS Vital Product Data region, typically NULL, meaning
  *	not used
  * @rsdp: Pointer to ACPI RSDP table
+ * @cfr: Pointer to the option descriptions (CFR), NULL if none
  * @smmstore: SMM-mediated flash store (SMMSTORE v2), all zero if not present:
  *	@num_blocks: Number of blocks in the store
  *	@block_size: Size of each block in bytes, e.g. 64KB
@@ -227,6 +228,7 @@ struct sysinfo_t {
 	u32 mtc_size;
 	void	*chromeos_vpd;
 	void *rsdp;
+	struct cb_cfr *cfr;
 	struct {
 		u32 num_blocks;
 		u32 block_size;

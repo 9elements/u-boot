@@ -8,6 +8,7 @@
 #ifndef _COREBOOT_TABLES_H
 #define _COREBOOT_TABLES_H
 
+#include <linux/bitops.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
 
@@ -505,6 +506,75 @@ struct cb_smmstorev2 {
 #define CB_MAX_SERIALNO_LENGTH		32
 
 #define CB_TAG_ACPI_RSDP		0x0043
+
+/* Option descriptions (CFR), see coreboot's commonlib/cfr.h */
+#define CB_TAG_CFR_ROOT			0x0047
+struct cb_cfr {
+	u32 tag;
+	u32 size;
+	u32 version;
+	u32 checksum;
+	/* forms follow */
+};
+
+enum cb_cfr_tag {
+	CFR_TAG_OPTION_FORM		= 1,
+	CFR_TAG_ENUM_VALUE		= 2,
+	CFR_TAG_OPTION_ENUM		= 3,
+	CFR_TAG_OPTION_NUMBER		= 4,
+	CFR_TAG_OPTION_BOOL		= 5,
+	CFR_TAG_OPTION_VARCHAR		= 6,
+	CFR_TAG_VARCHAR_OPT_NAME	= 7,
+	CFR_TAG_VARCHAR_UI_NAME		= 8,
+	CFR_TAG_VARCHAR_UI_HELPTEXT	= 9,
+	CFR_TAG_VARCHAR_DEF_VALUE	= 10,
+	CFR_TAG_OPTION_COMMENT		= 11,
+	CFR_TAG_DEP_VALUES		= 12,
+};
+
+#define CFR_OPTFLAG_READONLY		BIT(0)
+#define CFR_OPTFLAG_INACTIVE		BIT(1)
+#define CFR_OPTFLAG_SUPPRESS		BIT(2)
+#define CFR_NUM_OPT_DISPFLAG_HEX	BIT(0)
+
+/* Every record starts with tag and size; size covers the nested records */
+struct cb_cfr_record {
+	u32 tag;
+	u32 size;
+} __packed;
+
+/* Strings and the dependency values; data_length bytes follow */
+struct cb_cfr_varbinary {
+	u32 tag;
+	u32 size;
+	u32 data_length;
+} __packed;
+
+/* Followed by a CFR_TAG_VARCHAR_UI_NAME record */
+struct cb_cfr_enum_value {
+	u32 tag;
+	u32 size;
+	u32 value;
+} __packed;
+
+/* Common start of forms, options and comments */
+struct cb_cfr_object {
+	u32 tag;
+	u32 size;
+	u64 object_id;
+	u64 dependency_id;	/* 0 if none */
+	u32 flags;
+} __packed;
+
+/* CFR_TAG_OPTION_ENUM, CFR_TAG_OPTION_NUMBER or CFR_TAG_OPTION_BOOL */
+struct cb_cfr_numeric_option {
+	struct cb_cfr_object obj;
+	u32 default_value;
+	u32 min;
+	u32 max;
+	u32 step;
+	u32 display_flags;
+} __packed;
 
 #define CB_TAG_CMOS_OPTION_TABLE	0x00c8
 

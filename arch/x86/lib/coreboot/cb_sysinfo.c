@@ -447,6 +447,9 @@ static int cb_parse_header(void *addr, int len, struct sysinfo_t *info)
 		case CB_TAG_SMMSTOREV2:
 			cb_parse_smmstorev2(ptr, info);
 			break;
+		case CB_TAG_CFR_ROOT:
+			info->cfr = (struct cb_cfr *)ptr;
+			break;
 		case CB_TAG_X86_ROM_MTRR:
 			cb_parse_x86_rom_var_mtrr(rec, info);
 			break;
