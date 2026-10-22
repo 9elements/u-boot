@@ -19,5 +19,6 @@ endif
 obj-$(CONFIG_SPI_FLASH) += spi-nor.o
 obj-$(CONFIG_SPI_FLASH_DATAFLASH) += sf_dataflash.o
 obj-$(CONFIG_$(PHASE_)SPI_FLASH_MTD) += sf_mtd.o
+obj-$(CONFIG_SPI_FLASH_COREBOOT_SMMSTORE) += coreboot_smmstore.o
 obj-$(CONFIG_SPI_FLASH_SANDBOX) += sandbox.o
 obj-$(CONFIG_$(PHASE_)BOOTDEV_SPI_FLASH) += sf_bootdev.o

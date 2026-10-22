@@ -66,4 +66,8 @@
 	sysinfo {
 		compatible = "coreboot,sysinfo";
 	};
+
+	smmstore {
+		compatible = "coreboot,smmstore";
+	};
 };
