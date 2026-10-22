@@ -15,6 +15,7 @@
 #include <test/cmd.h>
 #include <test/test.h>
 #include <test/ut.h>
+#include <asm/cb_sysinfo.h>
 #include "../../boot/scene_internal.h"
 
 enum {
@@ -86,6 +87,37 @@ static int test_cmd_cbcmos(struct unit_test_state *uts)
 	return 0;
 }
 CMD_TEST(test_cmd_cbcmos, UTF_CONSOLE);
+
+/* test that cfr lists the options and does not stage unknown ones */
+static int test_cmd_cfr(struct unit_test_state *uts)
+{
+	const struct sysinfo_t *info = cb_get_sysinfo();
+
+	if (!IS_ENABLED(CONFIG_CMD_CFR))
+		return -EAGAIN;
+
+	if (!info || !info->cfr) {
+		ut_asserteq(1, run_command("cfr", 0));
+		ut_assert_nextline("coreboot provides no option table (CFR)");
+		ut_assert_console_end();
+		return 0;
+	}
+
+	ut_assertok(run_command("cfr", 0));
+	ut_assert_skip_to_linen("  ");
+	console_record_reset();
+
+	ut_asserteq(1, run_command("cfr set no_such_option 1", 0));
+	ut_assert_nextline("Unknown option 'no_such_option'; 'cfr list' shows the options");
+	ut_assert_console_end();
+
+	ut_assertok(run_command("cfr pending", 0));
+	ut_assert_nextline("No unsaved changes");
+	ut_assert_console_end();
+
+	return 0;
+}
+CMD_TEST(test_cmd_cfr, UTF_CONSOLE);
 
 /* test 'cedit cb_load' command */
 static int test_cmd_cedit_cb_load(struct unit_test_state *uts)

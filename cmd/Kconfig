@@ -3082,6 +3082,17 @@ endmenu
 
 menu "Debug commands"
 
+config CMD_CFR
+	bool "cfr - show and change coreboot runtime options"
+	depends on X86 && COREBOOT_SYSINFO && EFI_LOADER
+	help
+	  coreboot describes its runtime options in the CFR table. This
+	  command lists and changes them. Values are UEFI variables with the
+	  coreboot vendor GUID, which coreboot reads with its
+	  USE_UBOOT_VARIABLE_STORE option backend, so the variables need a
+	  persistent store such as EFI_VARIABLE_SF_STORE on
+	  SPI_FLASH_COREBOOT_SMMSTORE.
+
 config CMD_CBSYSINFO
 	bool "cbsysinfo"
 	depends on X86
