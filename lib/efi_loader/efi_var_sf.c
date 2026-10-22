@@ -90,8 +90,14 @@ efi_status_t efi_var_from_storage(void)
 		goto error;
 	}
 
+	/* Read the header first and then only the variables it covers */
 	r = spi_flash_read_dm(sfdev, CONFIG_EFI_VARIABLE_SF_OFFSET,
-			      EFI_VAR_BUF_SIZE, buf);
+			      sizeof(*buf), buf);
+	if (!r && buf->magic == EFI_VAR_FILE_MAGIC &&
+	    buf->length > sizeof(*buf) && buf->length <= EFI_VAR_BUF_SIZE)
+		r = spi_flash_read_dm(sfdev,
+				      CONFIG_EFI_VARIABLE_SF_OFFSET + sizeof(*buf),
+				      buf->length - sizeof(*buf), buf->var);
 	if (r) {
 		log_err("Failed to read from SPI Flash: %d\n", r);
 		ret = EFI_DEVICE_ERROR;
