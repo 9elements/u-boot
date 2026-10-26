@@ -693,7 +693,7 @@ int nvme_scan_namespace(void)
 			log_err("Failed to probe '%s': err=%dE\n", dev->name,
 				ret);
 			/* Bail if we ran out of memory, else keep trying */
-			if (ret != -EBUSY)
+			if (ret == -ENOMEM)
 				return ret;
 		}
 	}
