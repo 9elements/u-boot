@@ -8,6 +8,8 @@
 #define __DRIVER_NVME_H__
 
 #include <asm/io.h>
+#include <cb_timestamp.h>
+#include <linux/kernel.h>
 
 struct nvme_id_power_state {
 	__le16			max_power;	/* centiwatts */
@@ -707,5 +709,27 @@ int nvme_init(struct udevice *udev);
  * Return: 0 if OK, -ve on error
  */
 int nvme_shutdown(struct udevice *udev);
+
+/* cbmem timestamp steps of nvme#N, recorded as TS_U_BOOT_NVME_BASE + 10 * N + step */
+enum nvme_ts_step {
+	NVME_TS_PROBE_START,	/* device_probe(): PCI parents, BAR, nvme_init() */
+	NVME_TS_DISABLE,	/* CC.EN=0 written, waiting for CSTS.RDY=0 */
+	NVME_TS_DISABLED,
+	NVME_TS_ENABLE,		/* CC.EN=1 written, waiting for CSTS.RDY=1 */
+	NVME_TS_READY,
+	NVME_TS_IO_QUEUES,	/* I/O queues created */
+	NVME_TS_IDENTIFIED,	/* Identify Controller done */
+	NVME_TS_NAMESPACES,	/* namespaces identified, partition tables read */
+	NVME_TS_PROBE_OK,
+	NVME_TS_PROBE_FAILED,
+};
+
+/* Not in SPL: it has no room left in its 64 KiB slot */
+#ifdef CONFIG_XPL_BUILD
+#define nvme_ts(n, step)	do { } while (0)
+#else
+#define nvme_ts(n, step) \
+	cb_timestamp(TS_U_BOOT_NVME_BASE + 10 * clamp((int)(n), 0, 9) + (step))
+#endif
 
 #endif /* __DRIVER_NVME_H__ */

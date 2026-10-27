@@ -13,6 +13,7 @@
 #include <memalign.h>
 #include <phys2bus.h>
 #include <time.h>
+#include <vsprintf.h>
 #include <dm/device-internal.h>
 #include <linux/compat.h>
 #include "nvme.h"
@@ -396,9 +397,11 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 		page_shift = dev_page_max;
 	}
 
+	nvme_ts(dev->instance, NVME_TS_DISABLE);
 	result = nvme_disable_ctrl(dev);
 	if (result < 0)
 		return result;
+	nvme_ts(dev->instance, NVME_TS_DISABLED);
 
 	nvmeq = dev->queues[NVME_ADMIN_Q];
 	if (!nvmeq) {
@@ -421,9 +424,11 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 	nvme_writeq(nvmeq->sq_dma_addr, &dev->bar->asq);
 	nvme_writeq(nvmeq->cq_dma_addr, &dev->bar->acq);
 
+	nvme_ts(dev->instance, NVME_TS_ENABLE);
 	result = nvme_enable_ctrl(dev);
 	if (result)
 		goto free_nvmeq;
+	nvme_ts(dev->instance, NVME_TS_READY);
 
 	nvmeq->cq_vector = 0;
 
@@ -688,7 +693,10 @@ int nvme_scan_namespace(void)
 		return ret;
 
 	uclass_foreach_dev(dev, uc) {
+		nvme_ts(trailing_strtol(dev->name), NVME_TS_PROBE_START);
 		ret = device_probe(dev);
+		nvme_ts(trailing_strtol(dev->name),
+			ret ? NVME_TS_PROBE_FAILED : NVME_TS_PROBE_OK);
 		if (ret) {
 			log_err("Failed to probe '%s': err=%dE\n", dev->name,
 				ret);
@@ -874,8 +882,10 @@ int nvme_init(struct udevice *udev)
 		log_debug("Unable to setup I/O queues(err=%dE)\n", ret);
 		goto free_prp_pool;
 	}
+	nvme_ts(ndev->instance, NVME_TS_IO_QUEUES);
 
 	nvme_get_info_from_identify(ndev);
+	nvme_ts(ndev->instance, NVME_TS_IDENTIFIED);
 
 	/* Create a blk device for each namespace */
 
@@ -923,6 +933,7 @@ int nvme_init(struct udevice *udev)
 	}
 
 	free(id);
+	nvme_ts(ndev->instance, NVME_TS_NAMESPACES);
 	return 0;
 
 free_id:

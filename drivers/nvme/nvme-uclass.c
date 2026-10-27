@@ -7,6 +7,7 @@
 #define LOG_CATEGORY UCLASS_NVME
 
 #include <bootdev.h>
+#include <cb_timestamp.h>
 #include <dm.h>
 #include <init.h>
 #include <log.h>
@@ -27,7 +28,9 @@ static int nvme_bootdev_hunt(struct bootdev_hunter *info, bool show)
 
 	/* init PCI first since this is often used to provide NVMe */
 	if (IS_ENABLED(CONFIG_PCI)) {
+		cb_timestamp(TS_U_BOOT_HUNT_PCI_INIT_START);
 		ret = pci_init();
+		cb_timestamp(TS_U_BOOT_HUNT_PCI_INIT_END);
 		if (ret)
 			log_warning("Failed to init PCI (%dE)\n", ret);
 	}

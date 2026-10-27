@@ -159,6 +159,12 @@ enum timestamp_id {
 	 */
 	TS_U_BOOT_READ_START = 10030,
 	TS_U_BOOT_READ_END = 10031,
+
+	/* NVMe bootdev hunter, between 10003 and 10004 (debug) */
+	TS_U_BOOT_HUNT_PCI_INIT_START = 10040,
+	TS_U_BOOT_HUNT_PCI_INIT_END = 10041,
+	/* Per controller nvme#N: 10100 + 10 * N + step, see drivers/nvme/nvme.h */
+	TS_U_BOOT_NVME_BASE = 10100,
 };
 
 struct memory_area;
