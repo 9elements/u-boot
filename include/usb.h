@@ -234,6 +234,14 @@ int usb_stor_info(void);
 
 #endif
 
+/**
+ * usb_storage_ifnum() - Find the mass-storage interface of a USB device
+ *
+ * @dev: USB device with its configuration read
+ * Return: number of the first mass-storage interface, or -1 if none
+ */
+int usb_storage_ifnum(struct usb_device *dev);
+
 #ifdef CONFIG_USB_HOST_ETHER
 
 #define USB_MAX_ETH_DEV 5
