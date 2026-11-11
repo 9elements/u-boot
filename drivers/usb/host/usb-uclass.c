@@ -731,6 +731,64 @@ static int usb_find_child(struct udevice *parent,
 	return -ENOENT;
 }
 
+/**
+ * usb_scan_composite_storage() - Bind the drive of a composite device
+ *
+ * U-Boot binds one driver per USB device, matched against interface 0. A
+ * composite device whose mass-storage interface comes later, such as the
+ * PiKVM gadget (keyboard and mice on interfaces 0-2, a drive on interface
+ * 3), would only get the driver for interface 0 and its drive would never
+ * be seen. Bind the storage driver to that interface as a second udevice
+ * on the same hub port, next to the one for interface 0. Both use the
+ * same address and slot; each has its own copy of struct usb_device and
+ * uses only the endpoints of its own interface.
+ *
+ * A failure here leaves the device for interface 0 as it is.
+ */
+static void usb_scan_composite_storage(struct udevice *parent,
+				       struct usb_device *udev,
+				       struct udevice *primary, int port)
+{
+	struct usb_interface_descriptor *iface;
+	struct usb_dev_plat *plat;
+	struct udevice *dev;
+	bool created = false;
+	int ifnum, ret;
+
+	if (!CONFIG_IS_ENABLED(USB_STORAGE))
+		return;
+	ifnum = usb_storage_ifnum(udev);
+	if (ifnum <= 0 || device_get_uclass_id(primary) == UCLASS_MASS_STORAGE)
+		return;
+	iface = &udev->config.if_desc[ifnum].desc;
+
+	ret = usb_find_child(parent, &udev->descriptor, iface, &dev);
+	if (ret) {
+		ret = usb_find_and_bind_driver(parent, &udev->descriptor, iface,
+					       dev_seq(udev->controller_dev),
+					       udev->devnum, port, &dev);
+		if (ret)
+			return;
+		created = true;
+	}
+	if (device_get_uclass_id(dev) != UCLASS_MASS_STORAGE) {
+		/* No storage driver matched; a generic driver got bound */
+		if (created)
+			device_unbind(dev);
+		return;
+	}
+	plat = dev_get_parent_plat(dev);
+	plat->devnum = udev->devnum;
+	plat->udev = udev;
+	ret = device_probe(dev);
+	if (ret) {
+		debug("%s: Storage on interface %d of '%s' failed: %d\n",
+		      __func__, ifnum, primary->name, ret);
+		if (created)
+			device_unbind(dev);
+	}
+}
+
 int usb_scan_device(struct udevice *parent, int port,
 		    enum usb_device_speed speed, struct udevice **devp)
 {
@@ -787,12 +845,6 @@ int usb_scan_device(struct udevice *parent, int port,
 	debug("read_descriptor for '%s': ret=%d\n", parent->name, ret);
 	if (ret)
 		return ret;
-	if (CONFIG_IS_ENABLED(USB_STORAGE)) {
-		int ifnum = usb_storage_ifnum(udev);
-
-		if (ifnum > 0)
-			iface = &udev->config.if_desc[ifnum].desc;
-	}
 	ret = usb_find_child(parent, &udev->descriptor, iface, &dev);
 	debug("** usb_find_child returns %d\n", ret);
 	if (ret) {
@@ -820,6 +872,7 @@ int usb_scan_device(struct udevice *parent, int port,
 		return ret;
 	}
 	*devp = dev;
+	usb_scan_composite_storage(parent, udev, dev, port);
 
 	return 0;
 }
