@@ -739,6 +739,23 @@ static int nvme_blk_probe(struct udevice *udev)
 	return 0;
 }
 
+/*
+ * Commit the volatile write cache. U-Boot may reset the machine right after a
+ * write (e.g. after a capsule update), and a drive with a volatile write cache
+ * can lose data that only reached the cache.
+ */
+static int nvme_flush(struct nvme_ns *ns)
+{
+	struct nvme_command c;
+
+	memset(&c, 0, sizeof(c));
+	c.common.opcode = nvme_cmd_flush;
+	c.common.nsid = cpu_to_le32(ns->ns_id);
+
+	return nvme_submit_sync_cmd(ns->dev->queues[NVME_IO_Q], &c, NULL,
+				    IO_TIMEOUT);
+}
+
 static ulong nvme_blk_rw(struct udevice *udev, lbaint_t blknr,
 			 lbaint_t blkcnt, void *buffer, bool read)
 {
@@ -746,7 +763,7 @@ static ulong nvme_blk_rw(struct udevice *udev, lbaint_t blknr,
 	struct nvme_dev *dev = ns->dev;
 	struct nvme_command c;
 	struct blk_desc *desc = dev_get_uclass_plat(udev);
-	int status;
+	int status = 0;
 	u64 prp2;
 	u64 total_len = blkcnt << desc->log2blksz;
 	u64 temp_len = total_len;
@@ -796,6 +813,9 @@ static ulong nvme_blk_rw(struct udevice *udev, lbaint_t blknr,
 	if (read)
 		invalidate_dcache_range((unsigned long)buffer,
 					(unsigned long)buffer + total_len);
+	else if (!IS_ENABLED(CONFIG_XPL_BUILD) && !status &&
+		 (dev->vwc & NVME_CTRL_VWC_PRESENT))
+		nvme_flush(ns);
 
 	return (total_len - temp_len) >> desc->log2blksz;
 }
