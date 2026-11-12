@@ -28,4 +28,13 @@ config SYS_CAR_SIZE
 	help
 	  This option specifies the board specific Cache-As-RAM (CAR) size.
 
+config COREBOOT_CAPSULE_DFU_ALT_INFO
+	string "DFU description of the flash region a capsule updates"
+	depends on EFI_HAVE_CAPSULE_SUPPORT
+	default "sf 0:0=COREBOOT-RECOVERY-A raw 0x40000 0x770000"
+	help
+	  The dfu_alt_info string for the one image that UEFI capsules
+	  update. The default is the RECOVERY_A region of the AMD A/B
+	  flash layout (coreboot's board_rave2_ab.fmd).
+
 endif  # CONFIG_VENDOR_COREBOOT

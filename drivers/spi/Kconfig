@@ -267,6 +267,21 @@ config GXP_SPI
 	help
 	  Enable support for SPI on GXP.
 
+config AMD_FCH_SPI
+	bool "AMD FCH SPI100 driver"
+	depends on X86 && DM_SPI
+	help
+	  Enable the driver for the SPI100 controller in AMD FCHs, which
+	  holds the boot SPI flash. Ported from coreboot. It needs an
+	  "amd,fch-spi" node in the device tree.
+
+config AMD_FCH_SPI_MUTEX
+	bool "Take the host BIOS SPI mutex"
+	depends on AMD_FCH_SPI
+	help
+	  Take the SPI mutex shared with the PSP before each command. Only
+	  for SoCs that have it (coreboot's SOC_AMD_COMMON_BLOCK_SPI_SEMAPHORE).
+
 config ICH_SPI
 	bool "Intel ICH SPI driver"
 	depends on X86

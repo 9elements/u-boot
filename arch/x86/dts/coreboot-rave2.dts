@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * coreboot payload device tree for the Sapphire RAVE2 (AMD Strix Halo):
+ * the generic coreboot one plus the boot SPI flash.
+ */
+
+#include "coreboot.dts"
+
+/ {
+	aliases {
+		spi0 = &spi;
+	};
+
+	spi: spi {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "amd,fch-spi";
+
+		spi-flash@0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			reg = <0>;
+			compatible = "jedec,spi-nor";
+			spi-max-frequency = <100000000>;
+		};
+	};
+};
