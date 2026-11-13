@@ -142,9 +142,13 @@ void efi_add_known_memory(void)
 			 * map (GRUB grows its heap exactly that way) would get a
 			 * hard failure. U-Boot's page tables only cover the low
 			 * 4GiB anyway, so the memory really is unusable until the
-			 * OS takes over. EFI_BOOT_SERVICES_DATA expresses that:
-			 * no payload allocates from it, and both GRUB and Linux
-			 * reclaim it as usable RAM after ExitBootServices().
+			 * OS takes over.
+			 *
+			 * Report it as EFI_LOADER_DATA: no payload allocates from
+			 * it, and Linux uses it as RAM right away. Linux keeps
+			 * boot-services memory reserved until late in its boot,
+			 * so with EFI_BOOT_SERVICES_DATA its early allocations
+			 * had to fit below 4GiB; the memmap of 128GiB does not.
 			 */
 			rgn_top = start + e820[i].size;
 			if (rgn_top <= ram_top)
@@ -152,7 +156,7 @@ void efi_add_known_memory(void)
 			if (start < ram_top)
 				start = ram_top;
 			efi_add_memory_map(start, rgn_top - start,
-					   EFI_BOOT_SERVICES_DATA);
+					   EFI_LOADER_DATA);
 			continue;
 		case E820_RESERVED:
 			type = EFI_RESERVED_MEMORY_TYPE;
